@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { recordUsage } from './usage';
+import { reservePaidUsage, finishPaidUsage } from './usage-budget';
 
 export type EnrichmentResult = {
   summary: string | null;
@@ -12,7 +12,7 @@ export type EnrichmentResult = {
 function getClient(): Anthropic | null {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
-  return new Anthropic({ apiKey: key });
+  return new Anthropic({ apiKey: key, maxRetries: 0 });
 }
 
 // Quick host-based DMCA pre-screen. Not legal advice; just a heuristic.
@@ -123,6 +123,9 @@ Title: ${input.title || 'unknown'}
 Content:
 ${input.body!.slice(0, 5500)}`;
 
+  const reservation = await reservePaidUsage(input.streamId, 'ai_enrich', 1, { model: MODEL, web_fetch: isArticle });
+  if (!reservation) return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
+
   try {
     const resp = await client.messages.create({
       model: MODEL,
@@ -148,28 +151,16 @@ ${input.body!.slice(0, 5500)}`;
       messages: [{ role: 'user', content: userText }],
     });
 
-    // Safety classifiers can decline instead of erroring (HTTP 200,
-    // stop_reason "refusal") — treat that the same as a failed call rather
-    // than trying to parse content that may not be JSON.
+    // The admitted attempt is already counted, including refusals and malformed
+    // output. Store provider token counts without adding a second usage event.
+    await finishPaidUsage(reservation, {
+      model: MODEL, input_tokens: resp.usage?.input_tokens ?? null,
+      output_tokens: resp.usage?.output_tokens ?? null, web_fetch: isArticle,
+      outcome: resp.stop_reason === 'refusal' ? 'refused' : 'returned',
+    });
     if (resp.stop_reason === 'refusal') {
-      console.warn('enrichContent refused for', input.url);
       return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
     }
-
-    // Record the AI cost as soon as the call returns — the tokens are billed
-    // whether or not parsing below succeeds. usage already reflects any
-    // content the web_fetch tool pulled into context.
-    await recordUsage({
-      streamId: input.streamId ?? null,
-      kind: 'ai_enrich',
-      units: 1,
-      meta: {
-        model: MODEL,
-        input_tokens: resp.usage?.input_tokens ?? null,
-        output_tokens: resp.usage?.output_tokens ?? null,
-        web_fetch: isArticle,
-      },
-    });
     const text = resp.content
       .filter((b) => b.type === 'text')
       .map((b) => (b as { type: 'text'; text: string }).text)
@@ -188,6 +179,7 @@ ${input.body!.slice(0, 5500)}`;
       contentWarning: parsed.content_warning === true,
     };
   } catch (err) {
+    await finishPaidUsage(reservation, { model: MODEL, web_fetch: isArticle, outcome: 'failed' });
     console.error('enrichContent failed', err);
     return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
   }

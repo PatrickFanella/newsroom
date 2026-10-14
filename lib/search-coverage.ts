@@ -1,4 +1,4 @@
-import { recordUsage } from './usage';
+import { reservePaidUsage, finishPaidUsage } from './usage-budget';
 
 export type CoverageResult = {
   title: string;
@@ -36,6 +36,10 @@ export async function searchRelatedCoverage(input: {
     // domains alongside the general search
     const fetches: Promise<CoverageResult[]>[] = [];
 
+    const units = preferred.length ? 2 : 1;
+    const reservation = await reservePaidUsage(input.streamId, 'coverage_search', units, { preferred: preferred.length > 0 });
+    if (!reservation) return [];
+
     // General search
     fetches.push(braveSearch(query, inputHost, apiKey, 10));
 
@@ -45,15 +49,8 @@ export async function searchRelatedCoverage(input: {
       fetches.push(braveSearch(siteQuery, inputHost, apiKey, 5));
     }
 
-    // Each braveSearch is one billable request (1 general, +1 if preferred).
-    await recordUsage({
-      streamId: input.streamId ?? null,
-      kind: 'coverage_search',
-      units: fetches.length,
-      meta: { preferred: preferred.length > 0 },
-    });
-
     const [general, targeted] = await Promise.all(fetches);
+    await finishPaidUsage(reservation, { preferred: preferred.length > 0, outcome: 'completed' });
 
     // Merge: preferred-source results first (deduped), then general
     const seen = new Set<string>();

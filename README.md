@@ -64,6 +64,10 @@ supabase/
 3. `npm run dev` and open http://localhost:3000
 4. **Note:** EventSub webhooks require a publicly reachable HTTPS URL. For local dev, use a tunnel like [ngrok](https://ngrok.com/) or test link submission directly via the mod/deck views.
 
+## Usage and allowance
+
+Owners can view monthly metered activity, set an estimated allowance, and pause paid AI summaries or related-coverage searches. See [Owner usage and allowance](docs/USAGE_BUDGETS.md) for estimate semantics and the required migration.
+
 ## Email sign-in (no Twitch)
 
 People can sign in with a magic link instead of Twitch; those accounts get the deck and shelves but none of the chat features. Supabase Auth proves the email address, then the app issues its own session cookie (`app/auth/callback`). Email signup is open to anyone and is not subject to `REQUIRE_APPROVAL`.

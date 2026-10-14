@@ -32,6 +32,7 @@ const TABS = [
   ['overlay', 'Overlay'],
   ['quickadd', 'Quick add'],
   ['questions', 'Questions'],
+  ['usage', 'Usage'],
   ['account', 'Account'],
 ] as const;
 type TabId = (typeof TABS)[number][0];
@@ -516,6 +517,8 @@ export function SetupForm({
         {saveError && <span className="ml-3 font-mono text-xs text-rust">{saveError}</span>}
       </section>
       )}
+
+      {tab === 'usage' && <div className="space-y-3"><h2 className="font-display text-xl font-bold">Usage and allowance</h2><p className="text-sm">See monthly activity, set an estimated allowance, and pause paid operations.</p><Link href="/usage" className="underline hover:text-rust">Open usage and allowance →</Link></div>}
 
       {tab === 'account' && (
       <>

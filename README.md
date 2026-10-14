@@ -110,8 +110,41 @@ No new environment variables.
 - **Theme values are validated on write, not on read.** A font family ends up inside both a stylesheet URL and a CSS `font-family`, and colours are written straight into a `<style>`; `lib/theme.ts` normalises colours to `#rrggbb` and restricts families to letters, digits and spaces once, at the point of saving, so no reader has to re-derive the rules.
 - **Three warning fields, on purpose.** `content_warning` is AI-guessed and internal (a triage hint on the card). `mod_notes` is an internal production aside. `trigger_warning` is the only one written *for the audience* — the streamer or a mod types it, and it's published verbatim: it opens the `!video` reply and the "Post to chat" message (ahead of the title and url, so it survives Twitch's pinned-message preview), and it's shown on the on-air overlay. Keeping them separate is what lets the first two stay candid.
 - **YouTube playlist handling** auto-expands into individual submissions when extracted, then the playlist itself is marked rejected with a `mod_notes` trail.
-- **Discord posting gets its own boundary column.** `discord_posted_at` tracks what's already gone to Discord separately from `notes_exported_at`'s Markdown boundary — a streamer posting to Discord and exporting Markdown to somewhere else on different schedules would otherwise find one export silently empty because the other already advanced a shared cursor. The webhook URL itself is a bearer secret (anyone holding it can post into that channel), so it's encrypted at rest the same way as the Twitch OAuth tokens and never sent back to the client after saving — only a "configured" flag is.
+- **Each export destination has its own note receipts.** Markdown and Discord acknowledge the IDs actually included in their exports. One destination does not consume the other's notes, and notes committed during an export remain available next time. The webhook URL itself is a bearer secret (anyone holding it can post into that channel), so it's encrypted at rest the same way as the Twitch OAuth tokens and never sent back to the client after saving — only a "configured" flag is.
 - **Insert-first dedup** handles concurrent submissions without unique constraints, preserving the allow_duplicates feature.
+
+## Play history and exports
+
+Apply `20261014003000_play_history_exports.sql` before deploying this change.
+The database records the play and its show note in one transaction. Retrying
+**Played** preserves the original timestamp and note. **Undo** cancels the note
+from active history and future exports; replay creates a new note with fresh
+export receipts. Clearing played submissions from the queue still preserves
+their notes. Cancelled records remain stored for inspection.
+
+The migration retains legacy duplicate notes and notes linked to submissions
+that are no longer played as cancelled records. It preserves detached notes
+and converts the previous export timestamps into per-note receipts. Review
+this history reconciliation before applying the migration to a hosted project.
+
+**Export Notes → Export new notes** downloads and acknowledges the current
+pending Markdown snapshot. Previews without `commit=1` do not acknowledge.
+**Download all history** (`scope=all`) is repeatable and never consumes pending
+notes, including when recovering a dropped download. Preparing a committed
+response records inclusion; it cannot prove that the browser saved the file.
+
+Discord uses a channel lease to prevent competing posts and records receipts
+after each successful message. If a later message fails, retry sends only
+unacknowledged notes. Large posts stop after a bounded runtime budget and can
+resume on retry. If Discord accepts a message but saving its database receipt
+fails, the app reports that retry may duplicate it; the two services cannot
+commit atomically. Undo does not retract messages already posted to Discord
+or copies already downloaded.
+
+Run `supabase/tests/play_history_exports.sql` only against an isolated database
+with the migrations applied. It checks transactional failures, retries, Undo,
+replay, equal timestamps, late notes, export isolation, lease fencing, queue
+clearing, and snapshots larger than 1,000 notes.
 
 ## License
 

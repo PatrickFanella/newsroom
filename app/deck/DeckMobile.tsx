@@ -355,7 +355,12 @@ export function DeckMobile({
               )}
               {!curateOnly && (
                 <DropdownMenuItem asChild>
-                  <a href="/api/notes?format=markdown&commit=1">Export notes</a>
+                  <a href="/api/notes?format=markdown&commit=1">Export new notes</a>
+                </DropdownMenuItem>
+              )}
+              {!curateOnly && (
+                <DropdownMenuItem asChild>
+                  <a href="/api/notes?format=markdown&scope=all">Download all history</a>
                 </DropdownMenuItem>
               )}
               {!curateOnly && discordWebhookConfigured && (

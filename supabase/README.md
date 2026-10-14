@@ -172,3 +172,12 @@ Run `psql -v ON_ERROR_STOP=1 -f supabase/tests/review_coordination.sql` in a
 disposable database after migrations. Its rolled-back fixtures check channel
 isolation, leases, fencing, owner release, stale edits/Undo, editorial versus
 metadata changes, legacy requests, and RPC privileges.
+
+## Enrichment evidence
+
+`20261014040000_enrichment_evidence.sql` adds nullable extraction and summary
+input-evidence JSON to submissions. Existing rows remain null. Basic
+extraction updates only extraction evidence; AI analysis writes its own input
+record alongside the generated fields, so late basic metadata cannot relabel
+a summary's inputs. Apply the migration before deploying extraction changes.
+Evidence records contain bounded metadata rather than fetched content.

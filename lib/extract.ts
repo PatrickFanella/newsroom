@@ -3,6 +3,7 @@ import { hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
 import { recordUsage } from './usage';
 import { extractMetaForKind, enrichExtractedMeta } from './extract-kind';
+import { inputEvidence } from './enrichment-evidence';
 
 // Pending links get metadata and free risk signals. Approved links are
 // enriched under a durable lease in submission-enrichment.ts.
@@ -14,6 +15,7 @@ export async function extractSubmissionFields(
     (await extractMetaForKind(sub.url, sub.kind)) ??
     (await extractMetaForKind(sub.url, 'article'))!;
   const patch: Record<string, unknown> = {
+    extraction_evidence: inputEvidence(meta.evidenceSource ?? 'unavailable', meta.bodyText),
     title: meta.title,
     description: meta.description,
     thumbnail_url: meta.thumbnail,
@@ -30,6 +32,7 @@ export async function extractSubmissionFields(
       url: sub.url, kind: sub.kind, meta, streamId: sub.stream_id,
     });
     failureReason = enriched.failureReason;
+    patch.summary_evidence = enriched.evidence;
     if (!failureReason) Object.assign(patch, {
       summary: enriched.summary,
       credibility_tag: enriched.credibility,
@@ -60,6 +63,8 @@ async function extractAndWrite(submissionId: string, includeAi: boolean): Promis
   } catch (err) {
     console.error(`${includeAi ? 'AI enrichment' : 'extraction'} failed for`, submissionId, err);
     await sb.from('submissions').update({
+      extraction_evidence: inputEvidence('unavailable', null, 'failed'),
+      ...(includeAi ? { summary_evidence: inputEvidence('unavailable', null, 'failed') } : {}),
       dmca_risk: hostDMCARisk(sub.url),
     }).eq('id', sub.id).eq('status', 'pending');
   }

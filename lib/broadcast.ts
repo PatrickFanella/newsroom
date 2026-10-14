@@ -22,6 +22,7 @@ export function savedRundownOrder(broadcast: Broadcast) {
 }
 
 export type BroadcastNote = {
+  submission_id?: string | null;
   id: string; title: string | null; url: string; played_at: string;
   timestamp_offset_s: number | null; summary: string | null; takeaway: string | null; archive_url: string | null;
 };

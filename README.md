@@ -64,6 +64,10 @@ supabase/
 3. `npm run dev` and open http://localhost:3000
 4. **Note:** EventSub webhooks require a publicly reachable HTTPS URL. For local dev, use a tunnel like [ngrok](https://ngrok.com/) or test link submission directly via the mod/deck views.
 
+## Preparation templates
+
+Mark a shelf as a preparation template to reuse its segments, standard links, item notes, and prep prompts. Create a named working shelf for each show, edit that copy, then send its rundown to the deck. Empty segments are retained in working copies. See [Reusable show preparation](supabase/PREPARATION_TEMPLATES.md) for the workflow, permissions, and required migration.
+
 ## Email sign-in (no Twitch)
 
 People can sign in with a magic link instead of Twitch; those accounts get the deck and shelves but none of the chat features. Supabase Auth proves the email address, then the app issues its own session cookie (`app/auth/callback`). Email signup is open to anyone and is not subject to `REQUIRE_APPROVAL`.

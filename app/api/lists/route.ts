@@ -13,7 +13,7 @@ export async function GET() {
   const sb = supabaseAdmin();
   const { data: lists, error } = await sb
     .from('lists')
-    .select('id, name, position, share_token, created_at, updated_at')
+    .select('id, name, position, share_token, is_template, created_at, updated_at')
     .eq('stream_id', session.streamId)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await sb
     .from('lists')
     .insert({ stream_id: session.streamId, name, position })
-    .select('id, name, position, share_token, created_at, updated_at')
+    .select('id, name, position, share_token, is_template, created_at, updated_at')
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

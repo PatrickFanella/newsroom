@@ -7,6 +7,7 @@ import { runAiEnrichment } from '@/lib/extract';
 import { normalizeTitleOverride } from '@/lib/title-override';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
+import { parseQueueSearch } from '@/lib/queue-search';
 
 export const maxDuration = 30;
 
@@ -97,31 +98,40 @@ export async function GET(req: NextRequest) {
 
   const status = req.nextUrl.searchParams.get('status'); // pending|approved|played|rejected|null
   const sb = supabaseAdmin();
-  let q = sb
-    .from('submissions')
-    .select('*')
-    .eq('stream_id', session.streamId)
-    .order('position', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(200);
-  if (status) q = q.eq('status', status);
+  let search;
+  try { search = parseQueueSearch(req.nextUrl.searchParams); }
+  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid search.' }, { status: 400 }); }
 
-  // Counts (for the tab labels, independent of the active filter) and
-  // now-playing (for the mod view), fetched together via one RPC — see
-  // queue_overview() in supabase/migrations — instead of the 5 separate
-  // per-status counts plus a sequential now-playing lookup this replaced.
+  // Paginated triage searches use their own newest-first ordering. Unpaged
+  // deck reads keep their existing position order and response shape.
+  const query = search
+    ? sb.rpc('search_queue', {
+      p_stream_id: session.streamId, p_status: search.status, p_query: search.query,
+      p_kind: search.kind || null, p_before: search.before, p_before_id: search.beforeId,
+    })
+    : (() => {
+      let q = sb.from('submissions').select('*').eq('stream_id', session.streamId)
+        .order('position', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false }).limit(200);
+      if (status) q = q.eq('status', status);
+      return q;
+    })();
   const [{ data, error }, ov] = await Promise.all([
-    q,
+    query,
     sb.rpc('queue_overview', { p_stream_id: session.streamId }).maybeSingle(),
   ]);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    const missingSearch = search && ['42883', 'PGRST202'].includes(error.code);
+    return NextResponse.json({ error: missingSearch ? 'Queue search is temporarily unavailable.' : 'Could not load the queue.' }, { status: missingSearch ? 503 : 500 });
+  }
 
   const overview: QueueOverviewRow = !ov.error && ov.data
     ? (ov.data as QueueOverviewRow)
     : await legacyOverview(sb, session.streamId);
 
   return NextResponse.json({
-    submissions: data || [],
+    submissions: search ? data?.submissions ?? [] : data || [],
+    ...(search ? { nextCursor: data?.next_cursor ?? null, matchedCount: data?.matched_count ?? 0 } : {}),
     nowPlaying: overview.now_playing,
     counts: {
       pending: overview.pending,

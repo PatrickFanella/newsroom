@@ -100,6 +100,25 @@ No new environment variables.
 7. When the streamer hits **Played**, the item is timestamped and copied to `show_notes`.
 8. Export to Markdown anytime from `/api/notes?format=markdown`, or post the played list to a Discord channel from Setup → Account or the deck header.
 
+## Finding items in the moderator queue
+
+The moderator view searches the selected status tab across original and
+replacement titles, URLs, publishers, topics, and submitter names. Search
+uses a case-insensitive literal substring: `%`, `_`, and backslashes are
+ordinary characters. Combine it with the media-type filter to narrow the
+results, or clear the filters to return to the full tab.
+
+Results show newest submissions first in pages of 50. **Load more items**
+reaches the rest of the backlog, including items beyond the previous
+200-item limit. Changing the search, status tab, or media type selects that
+combination's pages. Status-tab counts describe the whole channel queue;
+the result count describes the current search. Bulk clear actions still
+apply to the entire selected status, including items outside the search.
+
+Apply `20261014020000_queue_search.sql` before running this feature. The deck
+continues to use its existing position-ordered queue. Search covers retained
+submissions; it does not search deleted items or archived show-note history.
+
 ## Architectural choices &amp; trade-offs
 
 - **Chat capture uses Twitch EventSub webhooks.** Twitch pushes chat messages to our API endpoint via HTTP — no persistent connection, no separate worker, runs entirely on Vercel. Links are captured even if nobody has the app open.

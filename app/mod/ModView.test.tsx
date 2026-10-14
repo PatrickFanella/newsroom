@@ -9,7 +9,7 @@
 // result — there's no setTimeout in this path to race against.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -88,9 +88,15 @@ function installMockBackend(
       const method = init?.method || 'GET';
 
       if (url.startsWith('/api/queue') && method === 'GET') {
-        const status = new URL(url, 'http://localhost').searchParams.get('status');
-        const submissions = [...state.values()].filter((s) => !status || s.status === status);
-        return jsonResponse({ submissions, nowPlaying: null, counts: counts() });
+        const params = new URL(url, 'http://localhost').searchParams;
+        const status = params.get('status');
+        const text = (params.get('q') ?? '').toLowerCase();
+        const kind = params.get('kind');
+        const matched = [...state.values()].filter((s) => (!status || s.status === status) && (!kind || s.kind === kind) && (!text || [s.title, s.url, s.publisher, s.submitter_login, ...s.topics].some(value => value?.toLowerCase().includes(text))));
+        const start = params.get('before') ? matched.findIndex(s => s.id === params.get('before')) + 1 : 0;
+        const submissions = matched.slice(start, start + 50);
+        const nextCursor = start + 50 < matched.length ? submissions.at(-1)?.id : null;
+        return jsonResponse({ submissions, nowPlaying: null, counts: counts(), matchedCount: matched.length, nextCursor });
       }
       if (url === '/api/queue' && method === 'PATCH') {
         const body = JSON.parse(String(init?.body || '{}'));
@@ -370,5 +376,85 @@ describe('ModView — copy link', () => {
 
     expect(writeText).toHaveBeenCalledWith('https://example.com/a');
     expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
+  });
+});
+
+
+describe('ModView — queue discovery', () => {
+  it('loads beyond the first page and can triage an item from that page', async () => {
+    const backend = installMockBackend(Array.from({ length: 55 }, (_, i) => makeSub(`story-${i}`, `Story ${i}`, 'pending')));
+    const user = userEvent.setup(); renderModView();
+    await screen.findByText('Story 0');
+    expect(screen.queryByText('Story 54')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('50 of 55 pending items');
+    await user.click(screen.getByRole('button', { name: 'Load more items' }));
+    const later = await screen.findByText('Story 54');
+    const card = later.closest('.card-paper')!;
+    await user.click(within(card as HTMLElement).getByRole('button', { name: /^approve$/i }));
+    await waitFor(() => expect(backend.patches).toContainEqual({ id: 'story-54', status: 'approved' }));
+    await waitFor(() => expect(screen.queryByText('Story 54')).not.toBeInTheDocument());
+  });
+  it('searches on the server after typing and preserves global tab counts', async () => {
+    installMockBackend([makeSub('a', 'Budget news', 'pending'), makeSub('b', 'Other news', 'pending')]);
+    const user = userEvent.setup(); renderModView();
+    await screen.findByText('Other news');
+    await user.type(screen.getByLabelText('Search queue'), 'budget');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 of 1 matching pending items'));
+    expect(screen.queryByText('Other news')).not.toBeInTheDocument();
+    expect(screen.getByText('pending (2)')).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => new URL(String(url), 'http://localhost').searchParams.get('q') === 'budget')).toBe(true);
+  });
+  it('combines media and text filters and recovers from an empty result', async () => {
+    installMockBackend([makeSub('a', 'Budget article', 'pending'), makeSub('b', 'Budget clip', 'pending', { kind: 'twitch_clip' })]);
+    const user = userEvent.setup(); renderModView();
+    await screen.findByText('Budget article');
+    await user.selectOptions(screen.getByLabelText('Media type'), 'twitch_clip');
+    await screen.findByText('Budget clip');
+    expect(screen.queryByText('Budget article')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Search queue'), 'absent');
+    await screen.findByText('No matching items.');
+    await user.click(screen.getByRole('button', { name: 'Clear search filters' }));
+    expect(await screen.findByText('Budget article')).toBeInTheDocument();
+    expect(screen.getByLabelText('Media type')).toHaveValue('');
+  });
+  it('resets pagination when filters change instead of retaining later-page rows', async () => {
+    installMockBackend(Array.from({ length: 55 }, (_, i) => makeSub(`story-${i}`, `Story ${i}`, 'pending')));
+    const user = userEvent.setup(); renderModView();
+    await user.click(await screen.findByRole('button', { name: 'Load more items' }));
+    await screen.findByText('Story 54');
+    await user.type(screen.getByLabelText('Search queue'), 'Story 0');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('1 of 1 matching'));
+    expect(screen.queryByText('Story 54')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more items' })).not.toBeInTheDocument();
+  });
+  it('does not approve the old result while a new search is debouncing', async () => {
+    const backend = installMockBackend([makeSub('a', 'Old story', 'pending')]);
+    const user = userEvent.setup(); renderModView();
+    await screen.findByText('Old story');
+    await user.type(screen.getByLabelText('Search queue'), 'new');
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeDisabled();
+    await user.click(document.body);
+    await userEvent.keyboard('a');
+    expect(backend.patches).toHaveLength(0);
+  });
+  it('shows an initial error with retry, then loads the recovered queue', async () => {
+    installMockBackend([makeSub('a', 'Recovered story', 'pending')]);
+    const goodFetch = fetch; let failing = true;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).startsWith('/api/queue') && failing ? jsonResponse({ error: 'Queue search unavailable' }, 503) : goodFetch(input, init)));
+    const user = userEvent.setup(); renderModView();
+    await screen.findByText('Queue search unavailable'); failing = false;
+    await user.click(screen.getByRole('button', { name: 'Retry queue' }));
+    expect(await screen.findByText('Recovered story')).toBeInTheDocument();
+  });
+  it('keeps the current page visible when loading more fails and supports retry', async () => {
+    installMockBackend(Array.from({ length: 51 }, (_, i) => makeSub(`story-${i}`, `Story ${i}`, 'pending')));
+    const goodFetch = fetch; let failing = true;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).includes('before=') && failing ? jsonResponse({ error: 'Try loading more again' }, 500) : goodFetch(input, init)));
+    const user = userEvent.setup(); renderModView();
+    await user.click(await screen.findByRole('button', { name: 'Load more items' }));
+    await screen.findByText('Try loading more again');
+    expect(screen.getByText('Story 0')).toBeInTheDocument(); failing = false;
+    await user.click(screen.getByRole('button', { name: 'Load more items' }));
+    expect(await screen.findByText('Story 50')).toBeInTheDocument();
   });
 });

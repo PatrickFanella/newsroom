@@ -19,6 +19,7 @@ import { ChatStatusBanner } from './ChatStatusBanner';
 import { GettingStarted } from './GettingStarted';
 import { ShortcutsModal } from './ShortcutsModal';
 import { AppHeader } from '@/components/AppHeader';
+import { BroadcastControls } from '@/components/BroadcastControls';
 import { Icon } from '@/components/ui/icon';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { Button } from '@/components/ui/button';
@@ -1321,6 +1322,7 @@ export function DeckView({
             type this stacked case was unreachable, so the right border was
             the only one it ever needed. */}
         <section className="p-8 border-b lg:border-b-0 lg:border-r border-ink/20">
+          <BroadcastControls streamId={streamId} canManage={!curateOnly} />
           {!loaded ? (
             <div>
               <div className="flex gap-2 mb-4">

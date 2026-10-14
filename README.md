@@ -181,6 +181,30 @@ with the migrations applied. It checks transactional failures, retries, Undo,
 replay, equal timestamps, late notes, export isolation, lease fencing, queue
 clearing, and snapshots larger than 1,000 notes.
 
+## Shows and recording chapters
+
+Start a named show from the deck before covering stories. The app saves the
+approved rundown at that moment and groups subsequent played notes into that
+show. Ending a show keeps the deck intact; starting the next show takes a new
+snapshot. Only the channel owner can start, end, or edit a show. Moderators can
+read the history at `/broadcasts`. Email accounts can use shows too.
+
+Open a show from its history to attach a Twitch VOD or YouTube video URL. Set
+the VOD offset to the number of seconds already recorded when you clicked
+**Start show**: for example, use 300 if the recording had begun five minutes
+earlier. Covered stories then link to their position in that recording.
+
+Each show has repeatable Markdown notes and chapter-timestamp downloads.
+These downloads include all covered notes in the selected show and do not
+advance the existing channel-wide Markdown or Discord export boundaries.
+Chapter files are editable timestamp lists; publishing them to a platform is
+a separate step. Show boundaries and recording URLs are entered manually.
+
+Apply `20261014010000_broadcast_sessions.sql` before running this feature.
+Existing notes stay in channel-wide history because their show boundaries
+cannot be reconstructed reliably. Clearing the deck preserves new show
+notes and saved rundowns.
+
 ## License
 
 MIT. Do whatever.

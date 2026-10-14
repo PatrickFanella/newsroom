@@ -2,7 +2,7 @@
 
 A deck for political &amp; news react streamers. Triage chat-submitted links, get DMCA risk signals, and turn your stream into show notes.
 
-Built with Next.js 16 (App Router), Supabase, Anthropic Claude, and Twitch EventSub webhooks. Deploys entirely on Vercel — no separate worker needed.
+Built with Next.js 16 (App Router), Supabase, configurable AI providers, and Twitch EventSub webhooks. Deploys entirely on Vercel — no separate worker needed.
 
 ## What's in here
 
@@ -32,7 +32,7 @@ lib/
   extract-article.ts   ─ bounded OpenGraph metadata extraction
   extract-youtube.ts   ─ YouTube page scraping + oEmbed + transcript
   extract-twitter.ts   ─ Twitter/X metadata
-  enrich.ts            ─ Anthropic summary + credibility + DMCA risk
+  enrich.ts            ─ provider-selected summary + credibility + DMCA risk
   submit-url.ts        ─ shared queue insertion + dedup logic
   search-coverage.ts   ─ Brave Search for related coverage
   discord.ts           ─ builds and sends the played list to a Discord webhook
@@ -61,6 +61,10 @@ Mark a shelf as a preparation template to reuse its segments, standard links, it
 ## Usage and allowance
 
 Owners can view monthly metered activity, set an estimated allowance, and pause paid AI summaries or related-coverage searches. See [Owner usage and allowance](docs/USAGE_BUDGETS.md) for estimate semantics and the required migration.
+
+## AI provider configuration
+
+Claude remains the default. Set `AI_PROVIDER=openai-compatible`, `OPENAI_MODEL`, and an optional `OPENAI_BASE_URL` to use OpenAI or a compatible Chat Completions endpoint. Custom endpoints can omit a key when they allow keyless access. See [AI providers and authorization](docs/AI_PROVIDERS.md) for configuration, source evidence, and current subscription sign-in limits.
 
 ## Email sign-in (no Twitch)
 

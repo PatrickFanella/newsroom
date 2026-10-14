@@ -1,4 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { selectedAIProvider } from './ai-config';
+import { enrichCompatible } from './enrich-compatible';
+import { parseEnrichmentResult } from './enrichment-result';
 import { reservePaidUsage, finishPaidUsage } from './usage-budget';
 import { inputEvidence, observedPageFetch, type EvidenceSource, type EnrichmentEvidence } from './enrichment-evidence';
 
@@ -84,8 +87,14 @@ export async function enrichContent(input: {
   evidenceSource?: EvidenceSource;
   streamId?: string | null; // for usage metering
 }): Promise<EnrichmentResult> {
-  const client = getClient();
   const hostRisk = hostDMCARisk(input.url);
+
+  let provider;
+  try { provider = selectedAIProvider(); }
+  catch { return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, failureReason: 'AI provider configuration is incomplete or invalid.' }; }
+  if (provider === 'openai-compatible') return enrichCompatible(input, hostRisk, SYSTEM_PROMPT);
+  const client = getClient();
+  const model = process.env.ANTHROPIC_MODEL?.trim() || MODEL;
 
   // Articles get their content read live via the web_fetch tool: the only
   // thing extract-article.ts hands us is an OG/twitter meta description,
@@ -134,12 +143,12 @@ Title: ${input.title || 'unknown'}
 Content:
 ${input.body!.slice(0, 5500)}`;
 
-  const reservation = await reservePaidUsage(input.streamId, 'ai_enrich', 1, { model: MODEL, web_fetch: isArticle });
+  const reservation = await reservePaidUsage(input.streamId, 'ai_enrich', 1, { provider: 'anthropic', model, web_fetch: isArticle });
   if (!reservation) return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, skippedReason: 'AI usage is paused, the allowance is exhausted, or usage could not be checked.', evidence };
 
   try {
     const resp = await client.messages.create({
-      model: MODEL,
+      model,
       max_tokens: 800,
       system: SYSTEM_PROMPT,
       ...(isArticle
@@ -162,7 +171,7 @@ ${input.body!.slice(0, 5500)}`;
       messages: [{ role: 'user', content: userText }],
     });
 
-    evidence.model = MODEL;
+    evidence.model = model;
     if (isArticle) Object.assign(evidence, observedPageFetch(resp.content));
 
     // Safety classifiers can decline instead of erroring (HTTP 200,
@@ -171,7 +180,7 @@ ${input.body!.slice(0, 5500)}`;
     // The admitted attempt is already counted, including refusals and malformed
     // output. Store provider token counts without adding a second usage event.
     await finishPaidUsage(reservation, {
-      model: MODEL, input_tokens: resp.usage?.input_tokens ?? null,
+      provider: 'anthropic', model, input_tokens: resp.usage?.input_tokens ?? null,
       output_tokens: resp.usage?.output_tokens ?? null, web_fetch: isArticle,
       outcome: resp.stop_reason === 'refusal' ? 'refused' : 'returned',
     });
@@ -183,26 +192,10 @@ ${input.body!.slice(0, 5500)}`;
       .filter((b) => b.type === 'text')
       .map((b) => (b as { type: 'text'; text: string }).text)
       .join('');
-    const clean = text.replace(/```json|```/g, '').trim();
-    let parsed;
-    try {
-      parsed = JSON.parse(clean);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || typeof parsed.summary !== 'string' || !parsed.summary.trim()) throw new Error('Invalid enrichment result');
-    } catch { return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, failureReason: 'AI enrichment failed. You can retry it.', evidence: { ...evidence, outcome: 'invalid_response' } }; }
-    // Combine model-suggested DMCA risk with host heuristic — take the higher
-    const modelRisk = (parsed.dmca_risk as 'low' | 'medium' | 'high' | undefined) || 'low';
-    const order = { low: 0, medium: 1, high: 2 };
-    const finalRisk = (order[modelRisk] ?? 0) > (order[hostRisk] ?? 0) ? modelRisk : hostRisk;
-    return {
-      summary: typeof parsed.summary === 'string' ? parsed.summary : null,
-      credibility: typeof parsed.credibility === 'string' ? parsed.credibility : null,
-      topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 6) : [],
-      dmcaRisk: finalRisk,
-      contentWarning: parsed.content_warning === true,
-      evidence: { ...evidence, outcome: 'succeeded' },
-    };
+    try { return parseEnrichmentResult(text, hostRisk, evidence); }
+    catch { return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, failureReason: 'AI enrichment failed. You can retry it.', evidence: { ...evidence, outcome: 'invalid_response' } }; }
   } catch (err) {
-    await finishPaidUsage(reservation, { model: MODEL, web_fetch: isArticle, outcome: 'failed' });
+    await finishPaidUsage(reservation, { provider: 'anthropic', model, web_fetch: isArticle, outcome: 'failed' });
     console.error('enrichContent failed', err);
     return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, failureReason: 'AI enrichment failed. You can retry it.', evidence: { ...evidence, outcome: 'failed' } };
   }

@@ -20,6 +20,9 @@ if (!buildOnly) {
       if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['', '/'].includes(url.pathname)) throw new Error();
     } catch { issues.push(`${name} must be an HTTPS origin without credentials, a path, query, or fragment`); }
   }
+  const { selectedAIProvider, compatibleAIConfig } = await import(new URL('../lib/ai-config.ts', import.meta.url).href);
+  try { if (selectedAIProvider() === 'openai-compatible') compatibleAIConfig(); }
+  catch { issues.push('AI provider selection or OpenAI-compatible configuration is invalid; check AI_PROVIDER, OPENAI_BASE_URL, OPENAI_MODEL, OPENAI_API_KEY, and OPENAI_MAX_TOKENS_FIELD'); }
   const twitch = ['NEXT_PUBLIC_TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET', 'EVENTSUB_SECRET'];
   if (twitch.some(name => process.env[name]?.trim())) {
     twitch.forEach(requireValue);

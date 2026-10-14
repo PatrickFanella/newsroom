@@ -56,13 +56,21 @@ independent Supabase project and independent credentials for Preview testing.
 | `NEWSROOM_SESSION_SECRET` | Stable, randomly generated cookie signing secret |
 | `CRON_SECRET` | Random secret for the daily Vercel cleanup request |
 | `NEXT_PUBLIC_TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `EVENTSUB_SECRET` | All three when Twitch features are used; optional for email-only operation |
-| `ANTHROPIC_API_KEY` | Optional AI enrichment; metadata, triage, and playback work without it |
+| `AI_PROVIDER` | Optional server-wide provider selection; defaults to `anthropic` |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude API credential and optional model override |
+| `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_API_KEY`, `OPENAI_MAX_TOKENS_FIELD` | OpenAI-compatible endpoint settings; see [AI providers](AI_PROVIDERS.md) |
 | `BRAVE_SEARCH_API_KEY` | Optional related-coverage search |
 | `YOUTUBE_API_KEY` | Optional YouTube metadata/playlist API; fallback extraction is best effort |
 | `ENCRYPTION_KEY` | Recommended stable 64-character hexadecimal key for stored Twitch tokens |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Recommended rate limiting; otherwise limits are disabled |
 | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Optional error reporting/source maps |
 | `ADMIN_TWITCH_IDS`, `REQUIRE_APPROVAL` | Optional owner policy; see `.env.example` |
+
+AI enrichment is optional; metadata, triage, and playback work without provider
+credentials. Custom AI servers must be reachable from Vercel. A local
+`localhost` model endpoint refers to the Vercel function itself after deployment,
+not the operator's machine. See [AI providers](AI_PROVIDERS.md) for authorization
+and subscription limitations.
 
 Generate random secrets locally, then enter them privately in Vercel. Keep
 session/encryption secrets stable across deployments. API and service secrets

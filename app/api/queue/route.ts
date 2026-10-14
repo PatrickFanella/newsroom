@@ -141,6 +141,7 @@ export async function PATCH(req: NextRequest) {
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
 
+  if ('expectedStatus' in body && !['pending','approved','played','rejected'].includes(body.expectedStatus)) return NextResponse.json({ error: 'Invalid expected status.' }, { status: 400 });
   // Status/notes are mod triage; reassigning a segment or position is curation,
   // so gate those fields behind curate permission (the streamer always passes).
   const isCuration = 'segment_id' in body || typeof body.position === 'number';
@@ -196,6 +197,12 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.duration_on_screen_s === 'number') patch.duration_on_screen_s = body.duration_on_screen_s;
 
   const sb = supabaseAdmin();
+  if (body.expectedStatus) {
+    const { data: current, error: readError } = await sb.from('submissions').select('status').eq('id', id).eq('stream_id', session.streamId).maybeSingle();
+    if (readError) return NextResponse.json({ error: 'Could not load lead item.' }, { status: 500 });
+    if (!current) return NextResponse.json({ error: 'Lead item not found.' }, { status: 404 });
+    if (current.status !== body.expectedStatus) return NextResponse.json({ error: 'Lead item changed. Refresh before approving.' }, { status: 409 });
+  }
 
   // Assign to a segment (or back to ungrouped). Append to the end of the
   // target group so it lands at the bottom of that segment.
@@ -278,14 +285,10 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  const { data, error } = await sb
-    .from('submissions')
-    .update(patch)
-    .eq('id', id)
-    .eq('stream_id', session.streamId)
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let write = sb.from('submissions').update(patch).eq('id', id).eq('stream_id', session.streamId);
+  if (body.expectedStatus) write = write.eq('status', body.expectedStatus);
+  const { data, error } = await write.select().single();
+  if (error) return NextResponse.json({ error: body.expectedStatus && error.code === 'PGRST116' ? 'Lead item changed. Refresh before approving.' : error.message }, { status: body.expectedStatus && error.code === 'PGRST116' ? 409 : 500 });
 
   // The AI summary/credibility/topics call is deferred to here, rather than
   // running on every pending submission — most links chat posts never get
@@ -308,6 +311,7 @@ export async function PATCH(req: NextRequest) {
       summary: data.summary,
       archive_url: data.archive_url,
       takeaway: body.takeaway || null,
+      story_bundle_snapshot: data.story_bundle_play_snapshot ?? null,
     });
   }
 

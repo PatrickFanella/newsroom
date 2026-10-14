@@ -113,6 +113,30 @@ No new environment variables.
 - **Discord posting gets its own boundary column.** `discord_posted_at` tracks what's already gone to Discord separately from `notes_exported_at`'s Markdown boundary — a streamer posting to Discord and exporting Markdown to somewhere else on different schedules would otherwise find one export silently empty because the other already advanced a shared cursor. The webhook URL itself is a bearer secret (anyone holding it can post into that channel), so it's encrypted at rest the same way as the Twitch OAuth tokens and never sent back to the client after saving — only a "configured" flag is.
 - **Insert-first dedup** handles concurrent submissions without unique constraints, preserving the allow_duplicates feature.
 
+## Shows and recording chapters
+
+Start a named show from the deck before covering stories. The app saves the
+approved rundown at that moment and groups subsequent played notes into that
+show. Ending a show keeps the deck intact; starting the next show takes a new
+snapshot. Only the channel owner can start, end, or edit a show. Moderators can
+read the history at `/broadcasts`. Email accounts can use shows too.
+
+Open a show from its history to attach a Twitch VOD or YouTube video URL. Set
+the VOD offset to the number of seconds already recorded when you clicked
+**Start show**: for example, use 300 if the recording had begun five minutes
+earlier. Covered stories then link to their position in that recording.
+
+Each show has repeatable Markdown notes and chapter-timestamp downloads.
+These downloads include all covered notes in the selected show and do not
+advance the existing channel-wide Markdown or Discord export boundaries.
+Chapter files are editable timestamp lists; publishing them to a platform is
+a separate step. Show boundaries and recording URLs are entered manually.
+
+Apply `20261014010000_broadcast_sessions.sql` before running this feature.
+Existing notes stay in channel-wide history because their show boundaries
+cannot be reconstructed reliably. Clearing the deck preserves new show
+notes and saved rundowns.
+
 ## License
 
 MIT. Do whatever.

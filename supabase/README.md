@@ -49,3 +49,24 @@ Postgres version (`show server_version;` on the remote database) if it
 ever drifts from the default. Nothing here requires the local dev stack
 (`supabase start`, Docker) — the app talks to the hosted project directly,
 the CLI is only used for `migration`/`db push`/`link`.
+
+## Broadcast sessions
+
+`20261014010000_broadcast_sessions.sql` adds show sessions and stamps newly
+inserted show notes with the session covering their play time. Starting and
+ending a show lock the channel row; a partial unique index also prevents
+concurrent active shows for one channel. End retries retain the original end
+time. The saved rundown contains only approved items at show start.
+
+The server scopes all reads and writes to the signed session's channel.
+Session tables use RLS without client policies, and session RPCs are granted
+only to the service role. Historical notes are not backfilled into guessed
+shows. This migration works on main alone and also with the separate
+play-history/export migration; cancelled plays are excluded when its
+cancellation column exists.
+
+Run the SQL contract after migrations in a disposable database using
+`psql -v ON_ERROR_STOP=1 -f supabase/tests/broadcast_sessions.sql`. It rolls
+back its fixtures and checks channel isolation, active-session uniqueness,
+idempotent ending, delayed-note timing, snapshot retention, cursor ties,
+and optional play-history compatibility.

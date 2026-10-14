@@ -12,4 +12,6 @@ export const queryKeys = {
   quickLinks: () => ['quick-links'] as const,
   shelves: () => ['shelves'] as const,
   shelf: (shelfId: string) => ['shelf', shelfId] as const,
+  broadcasts: (streamId: string) => ['broadcasts', streamId] as const,
+  broadcast: (streamId: string, id: string) => ['broadcast', streamId, id] as const,
 };

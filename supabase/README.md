@@ -120,3 +120,27 @@ Run the SQL contract after migrations in a disposable database using
 back its fixtures and checks channel isolation, active-session uniqueness,
 idempotent ending, delayed-note timing, snapshot retention, cursor ties,
 and optional play-history compatibility.
+
+## Queue search and pagination
+
+`20261014020000_queue_search.sql` adds the server-only `search_queue` RPC and
+a channel/status/timestamp/id index. Moderator reads opt into it with
+`/api/queue?page=1&status=pending&q=budget&kind=article`; subsequent pages
+send the returned `nextCursor` as `before`. Search returns up to 50 items,
+an exact matching count, and a timestamp/UUID cursor. Microsecond timestamp
+precision is retained, and the UUID resolves tied timestamps. Legacy null
+creation times sort at the Unix epoch so those items remain reachable.
+
+The server validates the status, media type, 200-character search limit, and
+cursor before calling the RPC, and supplies the channel from the signed
+session. The function uses literal substring matching across each searchable
+field, with no user-supplied SQL, wildcard syntax, or PostgREST filter strings.
+Only the service role can execute it. Unpaged queue reads retain their
+existing response shape and deck ordering.
+
+Apply the migration before deploying the moderator UI. A missing search RPC
+returns HTTP 503 rather than a successful but capped fallback. Run
+`psql -v ON_ERROR_STOP=1 -f supabase/tests/queue_search.sql` in a disposable
+database after migrations to check isolation, filters, literal characters,
+large backlogs, cursor ties, concurrent head inserts, and RPC privileges.
+The test rolls back its fixtures.

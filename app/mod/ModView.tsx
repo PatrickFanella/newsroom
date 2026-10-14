@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { SwipeRow } from '@/components/SwipeRow';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
@@ -20,6 +20,8 @@ import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { QUEUE_MEDIA_KINDS, queueSearchUrl, type QueueMediaKind } from '@/lib/queue-search';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
@@ -35,18 +37,23 @@ function isStatusKey(s: string): s is StatusKey {
 }
 
 type Counts = { pending: number; approved: number; played: number; rejected: number; total: number };
-type QueueData = { submissions: Submission[]; nowPlaying: Submission | null; counts: Counts };
+type QueueData = { submissions: Submission[]; nowPlaying: Submission | null; counts: Counts; nextCursor: string | null; matchedCount: number };
 
 const EMPTY_COUNTS: Counts = { pending: 0, approved: 0, played: 0, rejected: 0, total: 0 };
 
-async function fetchQueue(filter: string): Promise<QueueData> {
-  const r = await fetch(`/api/queue?status=${filter}`);
-  if (!r.ok) throw new Error('Failed to load queue');
+async function fetchQueue(filter: string, query: string, kind: string, cursor: string | null): Promise<QueueData> {
+  const r = await fetch(queueSearchUrl(filter, query, kind, cursor));
+  if (!r.ok) {
+    const error = await r.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to load queue');
+  }
   const data = await r.json();
   return {
     submissions: data.submissions || [],
     nowPlaying: data.nowPlaying || null,
     counts: data.counts || EMPTY_COUNTS,
+    nextCursor: data.nextCursor ?? null,
+    matchedCount: data.matchedCount ?? data.submissions?.length ?? 0,
   };
 }
 
@@ -81,24 +88,32 @@ export function ModView({
   const headerRef = useRef<HTMLElement>(null);
   const headerHeight = useElementHeight(headerRef);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
-  const queueKey = queryKeys.queue(streamId, filter);
-  const queueKeyAllFilters = queryKeys.queue(streamId); // prefix — matches every filter's cached query
-
-  // keepPreviousData means switching tabs keeps showing the last filter's
-  // list while the new one loads, instead of flashing back to the skeleton —
-  // matches the original's behavior of never resetting `loaded` after the
-  // first fetch. refetchInterval replaces the old useVisiblePoll(120s)
-  // backstop (it already pauses in background tabs by default).
-  const { data, isPending: loading } = useQuery({
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState<QueueMediaKind | ''>('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  const queueKey = queryKeys.queueSearch(streamId, filter, search, kind);
+  const queueKeyAllFilters = queryKeys.queue(streamId);
+  const queue = useInfiniteQuery({
     queryKey: queueKey,
-    queryFn: () => fetchQueue(filter),
-    placeholderData: keepPreviousData,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => fetchQueue(filter, search, kind, pageParam),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
     refetchInterval: 120000,
   });
-  const submissions = data?.submissions ?? [];
-  const nowPlaying = data?.nowPlaying ?? null;
-  const counts = data?.counts ?? EMPTY_COUNTS;
-  const loaded = !loading;
+  // Each search/status/type combination owns its pages. Do not keep another
+  // filter's rows visible and actionable while the new query is loading.
+  const firstPage = queue.data?.pages[0];
+  const submissions = [...new Map((queue.data?.pages.flatMap(page => page.submissions) ?? []).map(item => [item.id, item])).values()];
+  const nowPlaying = firstPage?.nowPlaying ?? null;
+  const counts = firstPage?.counts ?? EMPTY_COUNTS;
+  const loaded = !queue.isPending;
+  const changingSearch = searchInput.trim() !== search;
+  const filtered = !!search || !!kind;
+  const resetSearch = () => { setSearchInput(''); setSearch(''); setKind(''); };
 
   // Refetch instantly when the server broadcasts a queue change — invalidate
   // every filter's cached query (not just the one currently on screen) so
@@ -154,6 +169,7 @@ export function ModView({
     id: string,
     patch: Record<string, unknown>,
   ): Promise<{ ok: boolean; error?: string }> => {
+    if (changingSearch || queue.isPending) return { ok: false, error: 'Wait for the search results.' };
     setRowErrors((prev) => {
       if (!(id in prev)) return prev;
       const next = { ...prev };
@@ -191,19 +207,16 @@ export function ModView({
     const prevItem = submissions.find((s) => s.id === id);
     const newStatus = typeof patch.status === 'string' ? patch.status : null;
     if (prevItem && newStatus && newStatus !== filter && isStatusKey(prevItem.status) && isStatusKey(newStatus)) {
-      queryClient.setQueryData<QueueData>(queueKey, (prev) => {
+      queryClient.setQueryData<InfiniteData<QueueData>>(queueKey, (prev) => {
         if (!prev) return prev;
         const fromStatus = prevItem.status as StatusKey;
         const toStatus = newStatus as StatusKey;
-        return {
-          ...prev,
-          submissions: prev.submissions.filter((s) => s.id !== id),
-          counts: {
-            ...prev.counts,
-            [fromStatus]: Math.max(0, prev.counts[fromStatus] - 1),
-            [toStatus]: prev.counts[toStatus] + 1,
-          },
-        };
+        return { ...prev, pages: prev.pages.map(page => ({
+          ...page,
+          submissions: page.submissions.filter((s) => s.id !== id),
+          matchedCount: Math.max(0, page.matchedCount - 1),
+          counts: { ...page.counts, [fromStatus]: Math.max(0, page.counts[fromStatus] - 1), [toStatus]: page.counts[toStatus] + 1 },
+        })) };
       });
     }
     // Auto-archive on approval (fire-and-forget; the snapshot link appears
@@ -301,7 +314,7 @@ export function ModView({
   }, [submissions.length]);
   useEffect(() => {
     setFocusedIndex(0);
-  }, [filter]);
+  }, [filter, search, kind]);
 
   // Held in a ref so the single listener always sees the latest state —
   // same pattern as the deck's keyboard handler (app/deck/DeckView.tsx).
@@ -311,7 +324,7 @@ export function ModView({
     // (e.g. the per-item note).
     const el = e.target as HTMLElement | null;
     const tag = el?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
 
     if (e.key === '?') {
       e.preventDefault();
@@ -321,7 +334,7 @@ export function ModView({
 
     // Navigate/approve/reject only mean something on the pending tab —
     // that's the only tab these shortcuts' target buttons render on.
-    if (filter !== 'pending' || submissions.length === 0) return;
+    if (filter !== 'pending' || submissions.length === 0 || changingSearch || queue.isPending) return;
 
     const target = submissions[focusedIndex];
     if (e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown') {
@@ -378,11 +391,11 @@ export function ModView({
       {/* Bar */}
       <AppHeader
         ref={headerRef}
-        className="border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
+        className="border-b-2 border-ink pl-10 pr-6 py-3 gap-6 [&>div]:flex-wrap [&>div]:max-w-full"
         section={<>mod triage{isMod && <> · {streamDisplayName}</>}</>}
         right={
           <>
-            <span className="uppercase tracking-widest">#{channel}</span>
+            <span className="uppercase tracking-widest break-words min-w-0 max-w-full">#{channel}</span>
             <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
@@ -502,9 +515,34 @@ export function ModView({
         </span>
       </div>
 
+      <div className="pl-10 pr-3 sm:pr-6 py-4 border-b border-ink/20">
+        <div className="max-w-5xl mx-auto flex flex-wrap items-end gap-3">
+          <label className="flex-1 min-w-0 basis-60 font-mono text-xs">
+            Search queue
+            <Input type="search" value={searchInput} maxLength={200} onChange={(event) => setSearchInput(event.target.value)} placeholder="Title, URL, publisher, topic, or submitter" className="w-full mt-1" />
+          </label>
+          <label className="font-mono text-xs">
+            Media type
+            <select value={kind} onChange={(event) => setKind(event.target.value as QueueMediaKind | '')} className="block mt-1 border border-ink/20 bg-paper px-2 h-[34px] max-w-full">
+              <option value="">All media</option>
+              {QUEUE_MEDIA_KINDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+          {(searchInput || kind) && <Button size="sm" variant="outline" onClick={resetSearch}>Clear search filters</Button>}
+        </div>
+        <p role="status" className="max-w-5xl mx-auto mt-2 font-mono text-xs text-ink/60">
+          {changingSearch || queue.isPending ? 'Searching…' : firstPage ? `${submissions.length} of ${firstPage.matchedCount} ${filtered ? 'matching ' : ''}${filter} items · newest first` : ''}
+        </p>
+      </div>
+
       {/* List */}
       <main className="pl-10 pr-3 sm:pr-6 py-6 max-w-5xl mx-auto w-full">
-        {!loaded ? (
+        {queue.isError && !queue.data ? (
+          <div role="alert" className="py-12 text-center space-y-3">
+            <p className="text-rust font-mono text-sm">{queue.error.message}</p>
+            <Button variant="outline" size="sm" onClick={() => queue.refetch()}>Retry queue</Button>
+          </div>
+        ) : !loaded ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="card-paper p-4 flex gap-4">
@@ -523,16 +561,16 @@ export function ModView({
         {submissions.length === 0 && (
           <div className="text-center py-24">
             <p className="font-display text-2xl mb-2">
-              {filter === 'pending' && 'Waiting for the firehose…'}
-              {filter === 'approved' && 'Nothing approved yet.'}
-              {filter === 'played' && 'Nothing played yet.'}
-              {filter === 'rejected' && 'No rejected links.'}
+              {filtered ? 'No matching items.' : filter === 'pending' && 'Waiting for the firehose…'}
+              {!filtered && filter === 'approved' && 'Nothing approved yet.'}
+              {!filtered && filter === 'played' && 'Nothing played yet.'}
+              {!filtered && filter === 'rejected' && 'No rejected links.'}
             </p>
             <p className="text-ink/60 font-mono text-sm">
-              {filter === 'pending' && "When chat posts a link, it'll appear here in seconds."}
-              {filter === 'approved' && 'Approve pending links to send them to the streamer deck.'}
-              {filter === 'played' && 'Items the streamer marks played show up here.'}
-              {filter === 'rejected' && 'Rejected links land here — you can unreject any of them.'}
+              {filtered ? 'Try a different search, media type, or status tab.' : filter === 'pending' && "When chat posts a link, it'll appear here in seconds."}
+              {!filtered && filter === 'approved' && 'Approve pending links to send them to the streamer deck.'}
+              {!filtered && filter === 'played' && 'Items the streamer marks played show up here.'}
+              {!filtered && filter === 'rejected' && 'Rejected links land here — you can unreject any of them.'}
             </p>
           </div>
         )}
@@ -560,6 +598,7 @@ export function ModView({
                       onApprove={approveItem}
                       onReject={rejectItem}
                       pending={pendingIds.has(s.id)}
+                      disabled={changingSearch}
                       segments={segments}
                     />
                   )}
@@ -597,7 +636,7 @@ export function ModView({
                       variant="outline"
                       size="sm"
                       onClick={() => mutate(s.id, { status: 'pending' })}
-                      disabled={pendingIds.has(s.id)}
+                      disabled={pendingIds.has(s.id) || changingSearch}
                     >
                       Unreject
                     </Button>
@@ -649,7 +688,7 @@ export function ModView({
             return (
               <SwipeRow
                 key={s.id}
-                disabled={pendingIds.has(s.id)}
+                disabled={pendingIds.has(s.id) || changingSearch}
                 onApprove={() => approveItem(s.id, '')}
                 onReject={() => rejectItem(s.id)}
               >
@@ -658,6 +697,9 @@ export function ModView({
             );
           })}
         </div>
+        {queue.isError && queue.data && <p role="alert" className="font-mono text-xs text-rust mt-4">{queue.error.message}</p>}
+        {queue.hasNextPage && <Button className="mt-6" variant="outline" disabled={queue.isFetching || changingSearch} onClick={() => queue.fetchNextPage()}>{queue.isFetchingNextPage ? 'Loading more…' : 'Load more items'}</Button>}
+        {queue.isError && queue.data && !queue.hasNextPage && <Button className="mt-3" size="sm" variant="outline" onClick={() => queue.refetch()}>Retry queue</Button>}
           </>
         )}
       </main>

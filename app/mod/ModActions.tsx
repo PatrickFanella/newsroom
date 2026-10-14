@@ -23,12 +23,14 @@ export function ModActions({
   onApprove,
   onReject,
   pending,
+  disabled = false,
   segments,
 }: {
   id: string;
   onApprove: (id: string, note: string, segmentId?: string | null) => void;
   onReject: (id: string) => void;
   pending: boolean;
+  disabled?: boolean;
   // Streamer, or a mod authorized to curate — see sessionCanCurate. Omitted
   // (or empty) for anyone else, in which case only the plain "into ungrouped"
   // Approve button renders; the split-button segment picker is purely a UI
@@ -51,7 +53,7 @@ export function ModActions({
             size="sm"
             className={`px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs flex-1 sm:flex-none ${hasSegments ? 'rounded-r-none border-r border-r-ink/20' : ''}`}
             onClick={() => onApprove(id, note)}
-            disabled={pending}
+            disabled={pending || disabled}
           >
             {pending ? 'Working…' : 'Approve'}
           </Button>
@@ -62,7 +64,7 @@ export function ModActions({
                   variant="moss"
                   size="sm"
                   className="px-2 py-2.5 sm:py-1.5 rounded-l-none"
-                  disabled={pending}
+                  disabled={pending || disabled}
                   aria-label="Approve into a segment"
                 >
                   ▾
@@ -88,7 +90,7 @@ export function ModActions({
           size="sm"
           className="flex-1 sm:flex-none px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
           onClick={() => onReject(id)}
-          disabled={pending}
+          disabled={pending || disabled}
         >
           Reject
         </Button>

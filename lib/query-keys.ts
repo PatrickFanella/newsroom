@@ -4,6 +4,8 @@
 export const queryKeys = {
   queue: (streamId: string | null, status?: string) =>
     status ? (['queue', streamId, status] as const) : (['queue', streamId] as const),
+  queueSearch: (streamId: string, status: string, query: string, kind: string) =>
+    ['queue', streamId, status, 'search', query, kind] as const,
   questions: (streamId: string | null, status?: string) =>
     status ? (['questions', streamId, status] as const) : (['questions', streamId] as const),
   modStatus: (streamId: string | null) => ['mod-status', streamId] as const,

@@ -1,0 +1,9 @@
+# Discord export for a show
+
+On an ended show's detail page, choose **Preview show export**. Review the exact messages, then choose **Post this show to Discord**. This uses the owner's configured Discord webhook. Moderator sessions cannot preview or send. Timestamps use the show start and configured recording offset, and the date comes from the show rather than the day of export.
+
+The server checks that the preview fingerprint still matches before creating an export. It stores the exact chunks and acknowledges each successful chunk separately under a fenced lease. Interrupted exports keep their original version and resume after the last acknowledged chunk. A long export may require another resume click. Two simultaneous exports cannot claim the same saved job. A completed identical version is not posted again. If the show's notes change after completion, a new preview creates a new full-show version; previous messages are not edited or deleted.
+
+Delivery is at least once. If Discord accepts a chunk but the database cannot save its receipt, resuming may duplicate that chunk. The error states this explicitly. Reload the preview after an error to see saved progress. Mentions are disabled, redirects are refused, and webhook requests have a timeout. No global Discord or Markdown export boundary is advanced.
+
+Apply `20261014110000_broadcast_discord_exports.sql` after the broadcast-session migration and before this app revision. The functions are service-role-only. The SQL contract covers concurrent claims, exact saved versions, ordered acknowledgments, expired-token fencing, completion and stream isolation. Provider calls are mocked for local verification; no real Discord post is used as a test. Application rollback retains saved receipts, but older app revisions cannot resume these per-show jobs.

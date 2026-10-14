@@ -9,7 +9,7 @@ export type BroadcastSummary = {
   vod_url: string | null; vod_offset_seconds: number; note_count: number;
 };
 export type Broadcast = Omit<BroadcastSummary, 'note_count'> & {
-  stream_id: string; updated_at: string;
+  stream_id: string; updated_at: string; public_token?: string | null; published_at?: string | null;
   rundown: {
     ungrouped_position: number;
     segments: { id: string; name: string; position: number }[];

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { loadBroadcast, loadBroadcasts, saveBroadcast } from '@/lib/broadcast-client';
 import { chapterTime, savedRundownOrder, vodChapterUrl, type Broadcast } from '@/lib/broadcast';
+import { PublishEpisode } from './PublishEpisode';
 import { CarryForward } from './CarryForward';
 import { ShowDiscordExport } from './ShowDiscordExport';
 import { queryKeys } from '@/lib/query-keys';
@@ -85,6 +86,7 @@ export function BroadcastsView({ streamId, canManage, displayName, broadcastId }
               <a href={`/api/broadcasts/${broadcast.id}?format=chapters`}>Download chapter timestamps</a>
               {broadcast.vod_url && <a href={broadcast.vod_url} target="_blank" rel="noreferrer">Watch recording ↗</a>}
             </div>
+            {canManage && broadcast.ended_at && <PublishEpisode key={broadcast.id+'-publish'} id={broadcast.id} title={broadcast.title} initialToken={broadcast.public_token}/>}
             {canManage && broadcast.ended_at && <CarryForward key={broadcast.id+'-carry'} detail={{broadcast,notes}}/>}
             {canManage && broadcast.ended_at && <ShowDiscordExport key={broadcast.id} id={broadcast.id}/>}
             <h3 className="font-display text-xl font-bold mt-6 mb-3">Covered stories</h3>

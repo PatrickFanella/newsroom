@@ -1,0 +1,11 @@
+# Owner usage and allowance
+
+Open **Settings → Usage → Open usage and allowance**. The page shows admitted AI and related-coverage requests plus metadata extractions for the UTC calendar month. It refreshes every 30 seconds while open. A warning appears on this page when the configured percentage is reached. Owners can pause AI summaries and related-coverage searches independently. Moderator sessions cannot read or change these settings.
+
+The optional monthly estimated allowance uses the existing application estimates: $0.003 per admitted AI request and $0.005 per admitted Brave search. A targeted preferred-source search requires two search requests. Blank means unlimited; zero pauses all paid requests. Each paid operation must fit the remaining allowance before starting. Free metadata extraction, queue approval, and playback continue. The allowance resets at the next UTC month boundary. Increasing the allowance resumes admission immediately.
+
+These are flat application estimates, not actual provider prices or an invoice cap. Existing historical usage events contribute to the current month. Admitted attempts remain counted after provider errors, refusals, or invalid responses because the provider may have billed them. Token counts from returned AI responses remain available in usage metadata. SDK automatic retries are disabled; any later application retry must reserve another attempt. Unknown ownership or an unavailable allowance check skips paid work instead of making an unmetered call.
+
+Apply `20261014070000_owner_usage_budgets.sql` before deploying the app revision. Its functions are callable only by the service role. The reservation locks the stream row, checks operation switches and current-month usage, and inserts the usage event in the same transaction. Updating owner settings takes the same row lock; requests admitted before a pause may finish.
+
+Run the SQL contract in a disposable migrated database with `psql -v ON_ERROR_STOP=1 -f supabase/tests/owner_usage_budgets.sql`. Local tests cover owner-only API access, input validation, threshold states, edit failure, and provider calls being blocked before dispatch. For application rollback, retain the additive schema and deploy the prior app revision; the prior code does not enforce these allowances.

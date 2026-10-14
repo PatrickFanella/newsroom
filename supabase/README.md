@@ -199,3 +199,12 @@ Apply this migration after `20261016040000_broadcast_sessions.sql`. Run
 `psql -v ON_ERROR_STOP=1 -f supabase/tests/story_bundles.sql` in a disposable
 database to check isolation, idempotency, conflicts, snapshots, retention,
 pagination, and privileges. Its fixtures roll back.
+
+## Enrichment evidence
+
+`20261014040000_enrichment_evidence.sql` adds nullable extraction and summary
+input-evidence JSON to submissions. Existing rows remain null. Basic
+extraction updates only extraction evidence; AI analysis writes its own input
+record alongside the generated fields, so late basic metadata cannot relabel
+a summary's inputs. Apply the migration before deploying extraction changes.
+Evidence records contain bounded metadata rather than fetched content.

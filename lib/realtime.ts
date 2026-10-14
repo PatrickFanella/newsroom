@@ -1,3 +1,5 @@
+import { waitUntil } from '@vercel/functions';
+
 // Server-side Realtime broadcast.
 // Fires a lightweight "changed" ping so open deck/mod/questions views can
 // refetch on demand instead of polling on a timer. Uses Supabase's HTTP
@@ -7,7 +9,7 @@
 // refetching through the authenticated REST endpoint, so nothing sensitive
 // rides the (anon-subscribable) websocket.
 
-async function broadcastChange(topic: string, streamId: string): Promise<void> {
+async function sendBroadcastChange(topic: string, streamId: string): Promise<void> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key || !streamId) {
@@ -18,6 +20,7 @@ async function broadcastChange(topic: string, streamId: string): Promise<void> {
   try {
     const r = await fetch(`${url.replace(/\/+$/, '')}/realtime/v1/api/broadcast`, {
       method: 'POST',
+      signal: AbortSignal.timeout(3_000),
       headers: {
         'Content-Type': 'application/json',
         apikey: key,
@@ -46,6 +49,14 @@ async function broadcastChange(topic: string, streamId: string): Promise<void> {
   } catch (err) {
     console.error(`broadcastChange(${topic}) failed:`, err);
   }
+}
+
+// Register at the shared boundary so legacy fire-and-forget callers also
+// retain delivery after their response. Callers may still await completion.
+function broadcastChange(topic: string, streamId: string): Promise<void> {
+  const work = sendBroadcastChange(topic, streamId);
+  waitUntil(work);
+  return work;
 }
 
 /** Pings `queue:${streamId}` — the deck, mod view, and overlay all refetch. */

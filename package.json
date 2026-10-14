@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:deployment": "node scripts/check-deployment.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",
@@ -58,5 +59,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

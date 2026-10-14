@@ -2,7 +2,7 @@
 
 A deck for political &amp; news react streamers. Triage chat-submitted links, get DMCA risk signals, and turn your stream into show notes.
 
-Built with Next.js 14 (App Router), Supabase, Anthropic Claude, and Twitch EventSub webhooks. Deploys entirely on Vercel — no separate worker needed.
+Built with Next.js 16 (App Router), Supabase, Anthropic Claude, and Twitch EventSub webhooks. Deploys entirely on Vercel — no separate worker needed.
 
 ## What's in here
 
@@ -29,7 +29,7 @@ app/
 lib/
   url.ts               ─ normalize URLs, detect media kind
   extract.ts           ─ orchestrates extraction per media kind
-  extract-article.ts   ─ Mozilla Readability + OpenGraph
+  extract-article.ts   ─ bounded OpenGraph metadata extraction
   extract-youtube.ts   ─ YouTube page scraping + oEmbed + transcript
   extract-twitter.ts   ─ Twitter/X metadata
   enrich.ts            ─ Anthropic summary + credibility + DMCA risk
@@ -44,25 +44,16 @@ components/
   SubmissionCard.tsx
   DarkModeToggle.tsx
 supabase/
-  schema.sql           ─ run this in Supabase SQL editor
+  migrations/          ─ ordered schema changes; see supabase/README.md
 ```
 
 ## Local setup
 
-1. `npm install`
-2. Copy `.env.example` to `.env.local` and fill in:
-   - **Twitch app** at https://dev.twitch.tv/console
-     - OAuth Redirect URL: `http://localhost:3000/api/twitch/callback`
-     - Set `NEXT_PUBLIC_TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET`
-   - **Supabase project** at https://supabase.com
-     - Run `supabase/schema.sql` in the SQL editor
-     - Fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-   - **Anthropic API key** — set `ANTHROPIC_API_KEY`
-   - **EventSub secret** — generate with `openssl rand -hex 32`, set as `EVENTSUB_SECRET`
-   - **YouTube Data API key** (optional but recommended) — set `YOUTUBE_API_KEY`
-   - **Brave Search API key** (optional) — set `BRAVE_SEARCH_API_KEY`
-3. `npm run dev` and open http://localhost:3000
-4. **Note:** EventSub webhooks require a publicly reachable HTTPS URL. For local dev, use a tunnel like [ngrok](https://ngrok.com/) or test link submission directly via the mod/deck views.
+1. Use Node.js 24 and run `npm ci`.
+2. Copy `.env.example` to `.env.local`. Set the Supabase URL, anon key, service-role key, and a stable `NEWSROOM_SESSION_SECRET`. Configure optional Twitch and AI integrations as needed.
+3. Apply the ordered migrations to a new Supabase project, or reconcile an existing project's migration history first. Follow [Database migrations](supabase/README.md); the retired `supabase/schema.sql` is not a setup source.
+4. For email sign-in, configure the Supabase email provider and redirect templates below. For Twitch sign-in, register `http://localhost:3000/api/twitch/callback` in your Twitch app and fill in its credentials and `EVENTSUB_SECRET`.
+5. Run `npm run dev` and open http://localhost:3000. Twitch EventSub requires a publicly reachable HTTPS callback; use a development tunnel or test direct link submission locally.
 
 ## Preparation templates
 
@@ -85,13 +76,9 @@ No new environment variables.
 
 ## Deploying to Vercel
 
-1. Push to your repo and import in Vercel.
-2. Set the env vars in **Project Settings → Environment Variables**:
-   - `NEXT_PUBLIC_APP_URL` = your production URL (e.g. `https://thebroadside.net`)
-   - `EVENTSUB_SECRET` = the secret generated above
-   - All other vars from `.env.example`
-3. Update the **Twitch app OAuth Redirect URL** to `{NEXT_PUBLIC_APP_URL}/api/twitch/callback`.
-4. Deploy. On first login, the app automatically creates a Twitch EventSub subscription to receive chat messages.
+Follow [Vercel deployment](docs/VERCEL_DEPLOYMENT.md) for fresh and existing Supabase projects, required versus optional environment variables, email/Twitch callbacks, preview isolation, and smoke checks. The repository pins Node.js 24 and gives API functions a 60-second execution budget. Database migrations are a separate step before deploying the matching application.
+
+After a production build, `npm run check:deployment` validates the environment without printing values. CI uses `npm run check:deployment -- --build-only` to verify deployment metadata without credentials.
 
 ## How a session flows
 

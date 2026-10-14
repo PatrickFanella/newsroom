@@ -1,3 +1,4 @@
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 // Covers the two additions the mod-view review flagged as missing relative
 // to the deck: an Undo toast on approve/reject (including the swipe path's
 // only safety net against a mis-swipe), and keyboard triage (j/k to move the

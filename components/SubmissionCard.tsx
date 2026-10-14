@@ -13,6 +13,7 @@ import type { ReviewState } from '@/lib/review-coordination';
 
 type Submission = ReviewState & {
   id: string;
+  story_bundle_id?: string | null;
   url: string;
   kind: string;
   status: string;

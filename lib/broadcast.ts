@@ -1,4 +1,5 @@
 import { computePlayOrder } from './play-order';
+import { bundleMarkdown, type BundleSnapshot } from './story-bundles';
 
 export const MAX_VOD_OFFSET = 604800;
 export const isBroadcastId = (value: unknown): value is string =>
@@ -13,7 +14,7 @@ export type Broadcast = Omit<BroadcastSummary, 'note_count'> & {
   rundown: {
     ungrouped_position: number;
     segments: { id: string; name: string; position: number }[];
-    items: { id: string; title: string | null; url: string; kind: string; segment_id: string | null; position: number | null; created_at: string }[];
+    items: { id: string; title: string | null; url: string; kind: string; segment_id: string | null; position: number | null; created_at: string; story_bundle?: BundleSnapshot | null }[];
   };
 };
 export function savedRundownOrder(broadcast: Broadcast) {
@@ -23,7 +24,7 @@ export function savedRundownOrder(broadcast: Broadcast) {
 
 export type BroadcastNote = {
   id: string; title: string | null; url: string; played_at: string;
-  timestamp_offset_s: number | null; summary: string | null; takeaway: string | null; archive_url: string | null;
+  timestamp_offset_s: number | null; summary: string | null; takeaway: string | null; archive_url: string | null; story_bundle_snapshot?: BundleSnapshot | null;
 };
 export type BroadcastDetail = { broadcast: Broadcast; notes: BroadcastNote[] };
 
@@ -91,7 +92,7 @@ export function broadcastChapterText({ broadcast, notes }: BroadcastDetail): str
   for (const note of notes) {
     if (note.timestamp_offset_s === null) continue;
     const seconds = Math.max(0, note.timestamp_offset_s + broadcast.vod_offset_seconds);
-    const title = oneLine(note.title || note.url);
+    const title = oneLine(note.story_bundle_snapshot?.title || note.title || note.url);
     // Several items can be marked played in one second. Preserve their titles
     // in one chapter instead of exporting duplicate timestamp lines.
     if (chapters.has(seconds)) chapters.get(seconds)!.push(title);
@@ -113,6 +114,7 @@ export function broadcastMarkdown(detail: BroadcastDetail): string {
     const stamp = offset === null ? '' : `${chapterTime(offset + broadcast.vod_offset_seconds)} · `;
     lines.push(`## ${link ? `[${stamp}${title}](${link})` : stamp + title}`, '', `[Source](${note.url})`, '');
     if (note.archive_url) lines.push(`[Archived snapshot](${note.archive_url})`, '');
+    if (note.story_bundle_snapshot) lines.push(bundleMarkdown(note.story_bundle_snapshot), '');
     if (note.summary) lines.push(note.summary, '');
     if (note.takeaway) lines.push(`> ${note.takeaway}`, '');
   }

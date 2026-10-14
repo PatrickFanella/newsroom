@@ -158,6 +158,7 @@ export async function PATCH(req: NextRequest) {
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
 
+  if ('expectedStatus' in body && !['pending','approved','played','rejected'].includes(body.expectedStatus)) return NextResponse.json({ error: 'Invalid expected status.' }, { status: 400 });
   // Status/notes are mod triage; reassigning a segment or position is curation,
   // so gate those fields behind curate permission (the streamer always passes).
   const isCuration = 'segment_id' in body || typeof body.position === 'number';
@@ -172,6 +173,7 @@ export async function PATCH(req: NextRequest) {
     .eq('id', id).eq('stream_id', session.streamId).maybeSingle();
   if (readError) return NextResponse.json({ error: 'Could not load the item.' }, { status: 500 });
   if (!current) return NextResponse.json({ error: 'Item not found.' }, { status: 404 });
+  if (body.expectedStatus && current.status !== body.expectedStatus) return NextResponse.json({ error: 'Lead item changed. Refresh before approving.' }, { status: 409 });
   const conflict = reviewConflict(current, session.accountId, expectedRevision);
   if (conflict) return NextResponse.json({ error: conflict, detail: reviewConflictMessage(conflict) }, { status: 409 });
 
@@ -289,7 +291,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: saved, error } = await sb.rpc('apply_submission_review', {
     p_stream_id: session.streamId, p_id: id, p_actor_id: session.accountId,
-    p_patch: patch, p_expected_revision: expectedRevision, p_expected_status: null,
+    p_patch: patch, p_expected_revision: expectedRevision, p_expected_status: body.expectedStatus ?? null,
   });
   if (error) return NextResponse.json({ error: 'Review coordination is temporarily unavailable.' }, { status: 503 });
   if (saved?.error) return NextResponse.json({ error: saved.error, detail: reviewConflictMessage(saved.error) }, { status: saved.error === 'not_found' ? 404 : 409 });

@@ -1,3 +1,4 @@
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 // Integration coverage for the deck's trickiest, most bug-prone path:
 // markPlayed/removeFromQueue write to the server immediately (not delayed
 // behind a cancellable timer — see their doc comments in DeckView.tsx for

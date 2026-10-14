@@ -77,3 +77,14 @@ describe('saved rundown order', () => {
     expect(broadcast.rundown.items[0].id).toBe('later-item');
   });
 });
+
+
+describe('bundle context in show exports',()=>{
+  it('uses the saved bundle title for chapters and includes saved sources in Markdown',()=>{
+    const story_bundle_snapshot={id:'bundle',title:'Saved bundle title',prep_note:'Saved bundle prep',sources:[{title:'Primary document',url:'https://example.com/document',role:'primary_document' as const}],revision:1,lead_source:{title:'Lead',url:'https://example.com/lead',kind:'article'}};
+    const bundled={...detail,notes:[{...detail.notes[0],story_bundle_snapshot}]};
+    expect(broadcastChapterText(bundled)).toContain('06:30 Saved bundle title');
+    expect(broadcastMarkdown(bundled)).toContain('Saved bundle prep');
+    expect(broadcastMarkdown(bundled)).toContain('Primary document: [Primary document](https://example.com/document)');
+  });
+});

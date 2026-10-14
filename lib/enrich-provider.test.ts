@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enrichContent } from './enrich';
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), options: vi.fn(), usage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), options: vi.fn(), usage: vi.fn(), reserve: vi.fn() }));
 vi.mock('@anthropic-ai/sdk', () => ({ default: class {
   messages = { create: mocks.create };
   constructor(options: unknown) { mocks.options(options); }
 } }));
-vi.mock('./usage', () => ({ recordUsage: mocks.usage }));
-const input = { url: 'https://example.com/story', kind: 'article', title: 'A story', publisher: 'Example', body: null };
+vi.mock('./usage-budget', () => ({ reservePaidUsage: mocks.reserve, finishPaidUsage: mocks.usage }));
+const input = { streamId: 'owned-channel', url: 'https://example.com/story', kind: 'article', title: 'A story', publisher: 'Example', body: null };
 
 beforeEach(() => {
-  vi.resetAllMocks();
+  vi.resetAllMocks(); mocks.reserve.mockResolvedValue('receipt');
   vi.stubEnv('ANTHROPIC_API_KEY', 'fixture-key');
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -30,7 +30,7 @@ describe('AI enrichment outcomes', () => {
   });
 
   it('reports a provider refusal as a retryable processing failure', async () => {
-    mocks.create.mockResolvedValue({ stop_reason: 'refusal' });
+    mocks.create.mockResolvedValue({ stop_reason: 'refusal', content: [] });
     expect((await enrichContent(input)).failureReason).toContain('declined');
   });
 
@@ -38,6 +38,15 @@ describe('AI enrichment outcomes', () => {
     mocks.create.mockResolvedValue({ content: [{ type: 'text', text }], usage: { input_tokens: 20, output_tokens: 5 } });
     expect((await enrichContent(input)).failureReason).toContain('failed');
     expect(mocks.usage).toHaveBeenCalledOnce();
+  });
+
+  it('never calls the provider when allowance admission fails', async () => {
+    mocks.reserve.mockResolvedValue(null);
+    const result=await enrichContent(input);
+    expect(result.skippedReason).toContain('usage');
+    expect(result.evidence?.outcome).toBe('skipped');
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.usage).not.toHaveBeenCalled();
   });
 
   it('returns successful content with a bounded provider timeout and no SDK retries', async () => {

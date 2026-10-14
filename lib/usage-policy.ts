@@ -31,4 +31,3 @@ export function parseUsageSettings(body: unknown): Record<string, unknown> | nul
   }
   return Object.keys(patch).length ? patch : null;
 }
-

@@ -10,7 +10,7 @@ import { inputEvidence } from './enrichment-evidence';
 export async function extractSubmissionFields(
   sub: { url: string; kind: string; stream_id: string },
   includeAi: boolean,
-): Promise<{ fields: Record<string, unknown>; failureReason?: string }> {
+): Promise<{ fields: Record<string, unknown>; failureReason?: string; skippedReason?: string }> {
   const meta =
     (await extractMetaForKind(sub.url, sub.kind)) ??
     (await extractMetaForKind(sub.url, 'article'))!;
@@ -27,13 +27,15 @@ export async function extractSubmissionFields(
     content_warning: scanContentWarning(meta.title, meta.description),
   };
   let failureReason: string | undefined;
+  let skippedReason: string | undefined;
   if (includeAi) {
     const enriched = await enrichExtractedMeta({
       url: sub.url, kind: sub.kind, meta, streamId: sub.stream_id,
     });
     failureReason = enriched.failureReason;
+    skippedReason = enriched.skippedReason;
     patch.summary_evidence = enriched.evidence;
-    if (!failureReason) Object.assign(patch, {
+    if (!failureReason && !skippedReason) Object.assign(patch, {
       summary: enriched.summary,
       credibility_tag: enriched.credibility,
       topics: enriched.topics,
@@ -42,7 +44,7 @@ export async function extractSubmissionFields(
     });
   }
   await recordUsage({ streamId: sub.stream_id, kind: 'extract', meta: { kind: sub.kind } });
-  return { fields: patch, failureReason };
+  return { fields: patch, failureReason, skippedReason };
 }
 
 async function extractAndWrite(submissionId: string, includeAi: boolean): Promise<void> {

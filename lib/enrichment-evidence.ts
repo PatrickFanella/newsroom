@@ -1,4 +1,4 @@
-export type EvidenceSource = 'page_metadata' | 'transcript' | 'description' | 'post_text' | 'unavailable';
+export type EvidenceSource = 'page_metadata' | 'page_text' | 'transcript' | 'description' | 'post_text' | 'unavailable';
 export type EnrichmentEvidence = {
   version: 1; checked_at: string; source: EvidenceSource; input_characters: number;
   outcome: 'metadata_only' | 'succeeded' | 'skipped' | 'failed' | 'refused' | 'invalid_response';
@@ -26,6 +26,7 @@ export function observedPageFetch(blocks: unknown[]): Pick<EnrichmentEvidence, '
 }
 export function evidenceLabel(evidence: EnrichmentEvidence | null | undefined): string {
   if (!evidence || evidence.version !== 1) return 'Input not recorded';
+  if (evidence.source === 'page_text') return 'Page text retrieved by server';
   if (evidence.retrieval === 'retrieved') return 'Page retrieved by provider';
-  return { page_metadata: 'Page metadata only', transcript: 'Video transcript and metadata', description: 'Description or caption only', post_text: 'Post text', unavailable: 'Content unavailable' }[evidence.source] ?? 'Input not recorded';
+  return { page_text: 'Page text retrieved by server', page_metadata: 'Page metadata only', transcript: 'Video transcript and metadata', description: 'Description or caption only', post_text: 'Post text', unavailable: 'Content unavailable' }[evidence.source] ?? 'Input not recorded';
 }

@@ -202,7 +202,7 @@ pagination, and privileges. Its fixtures roll back.
 
 ## Enrichment evidence
 
-`20261014040000_enrichment_evidence.sql` adds nullable extraction and summary
+`20261016070000_enrichment_evidence.sql` adds nullable extraction and summary
 input-evidence JSON to submissions. Existing rows remain null. Basic
 extraction updates only extraction evidence; AI analysis writes its own input
 record alongside the generated fields, so late basic metadata cannot relabel

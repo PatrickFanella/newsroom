@@ -100,6 +100,13 @@ describe('submission enrichment worker', () => {
     expect(mocks.coverage).not.toHaveBeenCalled();
   });
 
+  it('records allowance skips without searching or claiming success', async () => {
+    mocks.extract.mockResolvedValue({fields:{title:'Free metadata'},skippedReason:'AI usage is paused'});
+    await runSubmissionEnrichment(job);
+    expect(writes[0].patch).toMatchObject({enrichment_state:'skipped',enrichment_error:'AI usage is paused',title:'Free metadata'});
+    expect(mocks.coverage).not.toHaveBeenCalled();
+  });
+
   it('records a failed database write instead of claiming completion', async () => {
     mocks.update.mockResolvedValueOnce({ error: { message: 'write failed' } }).mockResolvedValueOnce({ error: null });
     await runSubmissionEnrichment(job);

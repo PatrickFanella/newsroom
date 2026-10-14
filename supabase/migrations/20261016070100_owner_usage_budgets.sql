@@ -56,3 +56,22 @@ $$;
 revoke all on function public.owner_usage_overview(uuid) from public, anon, authenticated;
 revoke all on function public.reserve_paid_usage(uuid,text,integer,jsonb) from public, anon, authenticated;
 grant execute on function public.owner_usage_overview(uuid), public.reserve_paid_usage(uuid,text,integer,jsonb) to service_role;
+
+create or replace function public.claim_submission_enrichment(
+  p_id uuid, p_stream_id uuid, p_token uuid, p_retry boolean default false
+)
+returns setof public.submissions
+language sql set search_path = public as $$
+  update public.submissions
+  set enrichment_state = 'running', enrichment_token = p_token,
+      enrichment_updated_at = now(), enrichment_error = null
+  where id = p_id and stream_id = p_stream_id and status = 'approved'
+    and exists (select 1 from public.streams where id = p_stream_id and approved is not false)
+    and summary is null
+    and (
+      enrichment_state = 'queued'
+      or (enrichment_state = 'running' and enrichment_updated_at < now() - interval '5 minutes')
+      or (p_retry and (enrichment_state = 'failed' or (enrichment_state = 'skipped' and enrichment_error is not null)))
+    )
+  returning *
+$$;

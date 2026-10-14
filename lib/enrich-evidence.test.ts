@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { enrichContent } from './enrich';
-const mocks = vi.hoisted(() => ({ create: vi.fn(), usage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), usage: vi.fn(), reserve: vi.fn() }));
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mocks.create }; } }));
-vi.mock('./usage', () => ({ recordUsage: mocks.usage }));
-const input = { url: 'https://example.com/article', title: 'Title', publisher: 'Example', body: 'A short page description', kind: 'article' };
+vi.mock('./usage-budget', () => ({ reservePaidUsage: mocks.reserve, finishPaidUsage: mocks.usage }));
+const input = { streamId: 'owned-channel', url: 'https://example.com/article', title: 'Title', publisher: 'Example', body: 'A short page description', kind: 'article' };
 const response = (content: unknown[], stop_reason = 'end_turn') => ({ content, stop_reason, usage: { input_tokens: 100, output_tokens: 50 } });
 const summary = { type: 'text', text: JSON.stringify({ summary: 'Summary', credibility: 'mainstream', topics: [], dmca_risk: 'low', content_warning: false }) };
-beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('ANTHROPIC_API_KEY', 'synthetic-test-only'); });
+beforeEach(() => { vi.clearAllMocks(); mocks.reserve.mockResolvedValue('receipt'); vi.stubEnv('ANTHROPIC_API_KEY', 'synthetic-test-only'); });
 afterEach(() => vi.unstubAllEnvs());
 describe('model input provenance', () => {
   it('records page retrieval only when the provider returns the tool result', async () => {

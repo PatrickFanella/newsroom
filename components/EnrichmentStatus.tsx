@@ -6,11 +6,11 @@ import { Button } from './ui/button';
 
 export type EnrichmentState = 'idle' | 'queued' | 'running' | 'complete' | 'skipped' | 'failed';
 
-export function EnrichmentStatus({ id, state, retryable = true }: { id: string; state?: EnrichmentState; retryable?: boolean }) {
+export function EnrichmentStatus({ id, state, error, retryable = true }: { id: string; state?: EnrichmentState; error?: string | null; retryable?: boolean }) {
   const queryClient = useQueryClient();
   const [retrying, setRetrying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  if (!state || state === 'idle' || state === 'complete' || state === 'skipped') return null;
+  if (!state || state === 'idle' || state === 'complete' || (state === 'skipped' && !error)) return null;
 
   async function retry() {
     setRetrying(true);
@@ -36,8 +36,8 @@ export function EnrichmentStatus({ id, state, retryable = true }: { id: string; 
 
   return (
     <div className="my-2 flex flex-wrap items-center gap-2 font-mono text-xs text-ink/60" role="status">
-      <span>{state === 'queued' ? 'Enrichment queued' : state === 'running' ? 'Enriching…' : 'Enrichment failed'}</span>
-      {state === 'failed' && retryable && (
+      <span>{state === 'queued' ? 'Enrichment queued' : state === 'running' ? 'Enriching…' : state === 'skipped' ? 'Enrichment skipped; check usage settings before retrying' : 'Enrichment failed'}</span>
+      {(state === 'failed' || state === 'skipped') && retryable && (
         <Button size="sm" variant="outline" disabled={retrying} onClick={retry}>
           {retrying ? 'Retrying…' : 'Retry enrichment'}
         </Button>

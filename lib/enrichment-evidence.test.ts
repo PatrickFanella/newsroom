@@ -17,6 +17,10 @@ describe('observable enrichment inputs', () => {
   it.each(['javascript:alert(1)', 'https://user:secret@example.com/article'])('does not expose unsafe provider URLs: %s', (url) => {
     expect(observedPageFetch([{ type: 'web_fetch_tool_result', content: { type: 'web_fetch_result', url } }])).toEqual({ retrieval: 'not_observed' });
   });
+  it('labels server-extracted page text separately from provider browsing', () => {
+    expect(evidenceLabel({...inputEvidence('page_text','Page text'),retrieval:'retrieved'})).toBe('Page text retrieved by server');
+    expect(evidenceLabel({...inputEvidence('page_metadata','Description'),retrieval:'retrieved'})).toBe('Page retrieved by provider');
+  });
   it('keeps historical unknown provenance separate from observed metadata', () => {
     expect(evidenceLabel(null)).toBe('Input not recorded');
     expect(evidenceLabel(inputEvidence('page_metadata', 'Description'))).toBe('Page metadata only');

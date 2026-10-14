@@ -9,7 +9,9 @@ import { ArchiveButton } from './ArchiveButton';
 import { TriggerWarningBanner } from './TriggerWarning';
 import { EnrichmentStatus, type EnrichmentState } from './EnrichmentStatus';
 
-type Submission = {
+import type { ReviewState } from '@/lib/review-coordination';
+
+type Submission = ReviewState & {
   id: string;
   url: string;
   kind: string;

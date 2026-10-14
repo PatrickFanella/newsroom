@@ -29,6 +29,8 @@ import { resolveTitle } from '@/lib/title-override';
 import { AnnounceButton } from './AnnounceButton';
 import { CopyButton } from './CopyButton';
 import { ModActions } from './ModActions';
+import { ReviewClaimControls } from '@/components/ReviewClaimControls';
+import { activeReviewClaim } from '@/lib/review-coordination';
 
 const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
@@ -63,6 +65,7 @@ export function ModView({
   streamDisplayName,
   submitCommand,
   streamId,
+  actorId,
   isMod = false,
   isAdmin = false,
   canCurate = false,
@@ -76,6 +79,7 @@ export function ModView({
   streamDisplayName: string;
   submitCommand: string | null;
   streamId: string;
+  actorId: string;
   isMod?: boolean;
   isAdmin?: boolean;
   canCurate?: boolean;
@@ -102,7 +106,7 @@ export function ModView({
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => fetchQueue(filter, search, kind, pageParam),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
-    refetchInterval: 120000,
+    refetchInterval: 30000,
   });
   // Each search/status/type combination owns its pages. Do not keep another
   // filter's rows visible and actionable while the new query is loading.
@@ -114,6 +118,16 @@ export function ModView({
   const changingSearch = searchInput.trim() !== search;
   const filtered = !!search || !!kind;
   const resetSearch = () => { setSearchInput(''); setSearch(''); setKind(''); };
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const claimedByOther = (item: Submission) => activeReviewClaim(item, now) && item.review_claim_actor_id !== actorId;
+  const updateReviewItem = (item: Partial<Submission> & { id: string }) => {
+    queryClient.setQueryData<InfiniteData<QueueData>>(queueKey, (prev) => prev ? { ...prev, pages: prev.pages.map(page => ({ ...page, submissions: page.submissions.map(s => s.id === item.id ? { ...s, ...item } : s) })) } : prev);
+    queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
+  };
 
   // Refetch instantly when the server broadcasts a queue change — invalidate
   // every filter's cached query (not just the one currently on screen) so
@@ -159,6 +173,10 @@ export function ModView({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
+        if (r.status === 409) {
+          queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
+          toast.error(e.detail || 'This item changed. Your action was not saved.');
+        }
         throw new Error(e.detail || e.error || 'Action failed');
       }
       return r.json();
@@ -168,8 +186,10 @@ export function ModView({
   const mutate = async (
     id: string,
     patch: Record<string, unknown>,
-  ): Promise<{ ok: boolean; error?: string }> => {
-    if (changingSearch || queue.isPending) return { ok: false, error: 'Wait for the search results.' };
+    revision?: number,
+  ): Promise<{ ok: boolean; error?: string; revision?: number }> => {
+    if (changingSearch || queue.isPending) return { ok: false, error: 'Wait for the current search results.' };
+    const expectedRevision = revision ?? submissions.find(s => s.id === id)?.editorial_revision;
     setRowErrors((prev) => {
       if (!(id in prev)) return prev;
       const next = { ...prev };
@@ -183,10 +203,11 @@ export function ModView({
     // both a jarring flash and wipes any row-local UI state.
     setPendingIds((prev) => new Set(prev).add(id));
 
-    let result: { ok: boolean; error?: string };
+    let result: { ok: boolean; error?: string; revision?: number };
     try {
-      await statusMutation.mutateAsync({ id, patch });
-      result = { ok: true };
+      const saved = await statusMutation.mutateAsync({ id, patch: { ...patch, ...(expectedRevision !== undefined ? { expectedRevision } : {}) } });
+      if (saved.submission) updateReviewItem(saved.submission);
+      result = { ok: true, revision: saved.submission?.editorial_revision };
     } catch (err) {
       result = { ok: false, error: err instanceof Error ? err.message : 'Action failed' };
     }
@@ -229,7 +250,7 @@ export function ModView({
       }).catch(() => {});
     }
     queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
-    return { ok: true };
+    return result;
   };
 
   // Approve/reject are the two actions a triage mod fires off fastest — a
@@ -243,10 +264,10 @@ export function ModView({
   // segmentId is undefined for the plain Approve button (lands wherever the
   // server default puts it — ungrouped) and null/an id when a destination was
   // explicitly picked from the segment menu or a number-key shortcut.
-  const approveItem = async (id: string, note: string, segmentId?: string | null) => {
+  const approveItem = async (id: string, note: string, segmentId?: string | null, revision?: number) => {
     const patch: Record<string, unknown> = { status: 'approved', mod_notes: note || null };
     if (segmentId !== undefined) patch.segment_id = segmentId;
-    const result = await mutate(id, patch);
+    const result = await mutate(id, patch, revision);
     if (result.ok) {
       const destination = segmentId ? segmentNameById.get(segmentId) : null;
       toast(destination ? `Approved → ${destination}` : 'Approved', {
@@ -256,7 +277,7 @@ export function ModView({
           // An explicit destination was picked, so clear it back out on undo —
           // otherwise a later plain re-approve would silently inherit the old
           // segment instead of landing back in ungrouped.
-          onClick: () => mutate(id, segmentId !== undefined ? { status: 'pending', segment_id: null } : { status: 'pending' }),
+          onClick: () => mutate(id, segmentId !== undefined ? { status: 'pending', segment_id: null } : { status: 'pending' }, result.revision),
         },
       });
     }
@@ -268,7 +289,7 @@ export function ModView({
     if (result.ok) {
       toast('Rejected', {
         duration: 5000,
-        action: { label: 'Undo', onClick: () => mutate(id, { status: 'pending' }) },
+        action: { label: 'Undo', onClick: () => mutate(id, { status: 'pending' }, result.revision) },
       });
     }
     return result;
@@ -343,13 +364,13 @@ export function ModView({
     } else if (e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp') {
       e.preventDefault();
       setFocusedIndex((i) => Math.max(i - 1, 0));
-    } else if ((e.key === 'a' || e.key === 'A') && target && !pendingIds.has(target.id)) {
+    } else if ((e.key === 'a' || e.key === 'A') && target && !pendingIds.has(target.id) && !claimedByOther(target)) {
       e.preventDefault();
       approveItem(target.id, '');
-    } else if ((e.key === 'r' || e.key === 'R') && target && !pendingIds.has(target.id)) {
+    } else if ((e.key === 'r' || e.key === 'R') && target && !pendingIds.has(target.id) && !claimedByOther(target)) {
       e.preventDefault();
       rejectItem(target.id);
-    } else if (/^[1-9]$/.test(e.key) && target && !pendingIds.has(target.id) && segments[Number(e.key) - 1]) {
+    } else if (/^[1-9]$/.test(e.key) && target && !pendingIds.has(target.id) && !claimedByOther(target) && segments[Number(e.key) - 1]) {
       // Approve the focused item straight into the Nth segment, in deck order.
       e.preventDefault();
       approveItem(target.id, '', segments[Number(e.key) - 1].id);
@@ -400,6 +421,7 @@ export function ModView({
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
+            <Link href="/moderation-history" className="underline hover:text-rust">Activity</Link>
             {/* Questions and Mod status are reached via the rail above, not a
                 header link — see the DeckRail block's comment. */}
             {/* Two different pages, deliberately: /setup is the channel and is
@@ -593,12 +615,16 @@ export function ModView({
                     <div className="font-mono text-xs text-rust w-full">⚠ {rowErrors[s.id]}</div>
                   )}
                   {s.status === 'pending' && (
+                    <ReviewClaimControls item={s} actorId={actorId} canReleaseOthers={!isMod} now={now} disabled={changingSearch || queue.isPending || pendingIds.has(s.id)} onChange={updateReviewItem} onRefresh={() => queryClient.invalidateQueries({ queryKey: queueKeyAllFilters })} />
+                  )}
+                  {s.status === 'pending' && (
                     <ModActions
                       id={s.id}
                       onApprove={approveItem}
                       onReject={rejectItem}
                       pending={pendingIds.has(s.id)}
-                      disabled={changingSearch}
+                      disabled={changingSearch || queue.isPending || claimedByOther(s)}
+                      revision={s.editorial_revision}
                       segments={segments}
                     />
                   )}
@@ -623,20 +649,21 @@ export function ModView({
                       someone actually watches the thing, which is usually
                       after it's been waved through. */}
                   {(s.status === 'pending' || s.status === 'approved') && (
-                    <div className="w-full">
+                    <fieldset disabled={changingSearch || queue.isPending || claimedByOther(s)} className="w-full min-w-0">
                       <TriggerWarningEditor
                         key={s.id}
                         value={s.trigger_warning}
-                        onSave={(v) => mutate(s.id, { trigger_warning: v })}
+                        revision={s.editorial_revision}
+                        onSave={(v, revision) => mutate(s.id, { trigger_warning: v }, revision)}
                       />
-                    </div>
+                    </fieldset>
                   )}
                   {s.status === 'rejected' && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => mutate(s.id, { status: 'pending' })}
-                      disabled={pendingIds.has(s.id) || changingSearch}
+                      disabled={pendingIds.has(s.id) || changingSearch || queue.isPending || claimedByOther(s)}
                     >
                       Unreject
                     </Button>
@@ -688,7 +715,7 @@ export function ModView({
             return (
               <SwipeRow
                 key={s.id}
-                disabled={pendingIds.has(s.id) || changingSearch}
+                disabled={pendingIds.has(s.id) || changingSearch || queue.isPending || claimedByOther(s)}
                 onApprove={() => approveItem(s.id, '')}
                 onReject={() => rejectItem(s.id)}
               >

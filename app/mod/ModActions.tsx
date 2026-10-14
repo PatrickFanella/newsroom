@@ -24,13 +24,15 @@ export function ModActions({
   onReject,
   pending,
   disabled = false,
+  revision,
   segments,
 }: {
   id: string;
-  onApprove: (id: string, note: string, segmentId?: string | null) => void;
+  onApprove: (id: string, note: string, segmentId?: string | null, revision?: number) => void;
   onReject: (id: string) => void;
   pending: boolean;
   disabled?: boolean;
+  revision?: number;
   // Streamer, or a mod authorized to curate — see sessionCanCurate. Omitted
   // (or empty) for anyone else, in which case only the plain "into ungrouped"
   // Approve button renders; the split-button segment picker is purely a UI
@@ -39,6 +41,7 @@ export function ModActions({
   segments?: ModActionsSegment[];
 }) {
   const [note, setNote] = useState('');
+  const [draftRevision, setDraftRevision] = useState(revision);
   const [showNote, setShowNote] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -52,7 +55,7 @@ export function ModActions({
             variant="moss"
             size="sm"
             className={`px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs flex-1 sm:flex-none ${hasSegments ? 'rounded-r-none border-r border-r-ink/20' : ''}`}
-            onClick={() => onApprove(id, note)}
+            onClick={() => onApprove(id, note, undefined, showNote ? draftRevision : revision)}
             disabled={pending || disabled}
           >
             {pending ? 'Working…' : 'Approve'}
@@ -72,12 +75,12 @@ export function ModActions({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 <DropdownMenuLabel>Approve into…</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={() => onApprove(id, note, null)}>
+                <DropdownMenuItem onSelect={() => onApprove(id, note, null, showNote ? draftRevision : revision)}>
                   Ungrouped
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {segments.map((seg) => (
-                  <DropdownMenuItem key={seg.id} onSelect={() => onApprove(id, note, seg.id)}>
+                  <DropdownMenuItem key={seg.id} onSelect={() => onApprove(id, note, seg.id, showNote ? draftRevision : revision)}>
                     {seg.name}
                   </DropdownMenuItem>
                 ))}
@@ -96,13 +99,18 @@ export function ModActions({
         </Button>
       </div>
       <button
-        onClick={() => setShowNote(!showNote)}
+        onClick={() => { if (!showNote) setDraftRevision(revision); setShowNote(!showNote); }}
         className="self-start font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
       >
         {showNote ? '− hide note' : '+ add note'}
       </button>
+      {showNote && revision !== undefined && draftRevision !== undefined && revision !== draftRevision && <div className="font-mono text-xs text-rust space-y-2">
+        <p>This item changed. Review the updated card before using your note.</p>
+        <Button size="xs" variant="outline" onClick={() => setDraftRevision(revision)}>Use note with latest item</Button>
+      </div>}
       {showNote && (
         <Input
+          aria-label="Moderator note"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="e.g. skip to 4:32, check the replies, paywalled..."

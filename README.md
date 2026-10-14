@@ -6,6 +6,8 @@ Built with Next.js 16 (App Router), configurable AI providers, and Twitch EventS
 
 For a server deployment with PostgreSQL, local email sign-in, and no Supabase project, follow [Self-hosting](docs/SELF_HOSTING.md). The setup includes private database access, persistent storage, a cleanup scheduler, backup instructions, and an isolated deployment smoke test.
 
+For guided setup, run `npm run install:guided` and open its private browser link. The installer collects email/Twitch and optional AI credentials, generates internal secrets, optionally configures HTTPS, and builds and starts the app. Follow the [beginner installation guide](docs/INSTALLATION_GUIDE.md) for prerequisites and remote-server access.
+
 ## What's in here
 
 ```

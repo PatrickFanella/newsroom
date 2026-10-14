@@ -7,3 +7,7 @@ node_modules
 *.tsbuildinfo
 AGENTS.md
 CLAUDE.md
+
+.newsroom-*
+compose.installer.yaml
+deploy/Caddyfile.installer

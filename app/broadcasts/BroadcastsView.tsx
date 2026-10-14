@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { loadBroadcast, loadBroadcasts, saveBroadcast } from '@/lib/broadcast-client';
 import { chapterTime, savedRundownOrder, vodChapterUrl, type Broadcast } from '@/lib/broadcast';
+import { ShowDiscordExport } from './ShowDiscordExport';
 import { queryKeys } from '@/lib/query-keys';
 import { useRealtimeChannel } from '@/lib/use-realtime-channel';
 
@@ -83,6 +84,7 @@ export function BroadcastsView({ streamId, canManage, displayName, broadcastId }
               <a href={`/api/broadcasts/${broadcast.id}?format=chapters`}>Download chapter timestamps</a>
               {broadcast.vod_url && <a href={broadcast.vod_url} target="_blank" rel="noreferrer">Watch recording ↗</a>}
             </div>
+            {canManage && broadcast.ended_at && <ShowDiscordExport key={broadcast.id} id={broadcast.id}/>}
             <h3 className="font-display text-xl font-bold mt-6 mb-3">Covered stories</h3>
             {notes.length === 0 ? <p className="text-sm text-ink/60">No items marked played in this show yet.</p> : <ol className="space-y-5">
               {notes.map((note) => {

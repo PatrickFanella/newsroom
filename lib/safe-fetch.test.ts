@@ -15,6 +15,7 @@ const METADATA_IP = '169.254.169.254'; // AWS/GCP instance metadata
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.mocked(dns.lookup).mockReset();
 });
 
@@ -140,5 +141,23 @@ describe('safeFetchText — size cap', () => {
     const result = await safeFetchText('http://example.com/', { maxBytes: 100 });
     expect(result.text).toBe('short');
     expect(result.truncated).toBe(false);
+  });
+});
+
+describe('safeFetchText — shared deadline', () => {
+  it('uses one timeout across a redirect chain instead of restarting it', async () => {
+    const timer = vi.spyOn(AbortSignal, 'timeout');
+    const request = vi.fn().mockResolvedValueOnce(new Response(null,{status:302,headers:{location:'http://93.184.216.34/next'}})).mockResolvedValueOnce(new Response('done'));
+    vi.stubGlobal('fetch',request);
+    await safeFetchText('http://93.184.216.34/',{timeoutMs:9000});
+    expect(timer).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][1].signal).toBe(request.mock.calls[1][1].signal);
+  });
+  it('does not start a redirected request after the caller aborts', async () => {
+    const controller=new AbortController();
+    const request=vi.fn(async()=>{controller.abort();return new Response(null,{status:302,headers:{location:'http://93.184.216.34/next'}});});
+    vi.stubGlobal('fetch',request);
+    await expect(safeFetchText('http://93.184.216.34/',{signal:controller.signal})).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(1);
   });
 });

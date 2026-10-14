@@ -19,7 +19,7 @@ import { handleRaffleEntry } from '@/lib/raffle';
 import { announceSubmission } from '@/lib/announce';
 import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // Twitch EventSub message types
 const VERIFICATION = 'webhook_callback_verification';

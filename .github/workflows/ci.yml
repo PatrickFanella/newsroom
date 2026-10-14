@@ -30,6 +30,8 @@ jobs:
 
       - name: Production build
         run: npm run build
+      - name: Verify Vercel build configuration
+        run: npm run check:deployment -- --build-only
 
   database:
     runs-on: ubuntu-latest

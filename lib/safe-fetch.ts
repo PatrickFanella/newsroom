@@ -131,6 +131,7 @@ async function assertPublicHost(hostname: string): Promise<void> {
 
 export type SafeFetchOptions = {
   headers?: Record<string, string>;
+  signal?: AbortSignal;
   maxBytes?: number; // default 5 MB
   maxRedirects?: number; // default 5
   timeoutMs?: number; // default 10000
@@ -157,9 +158,13 @@ export type SafeFetchResult = {
 export async function safeFetchText(url: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
   const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
   const maxRedirects = options.maxRedirects ?? 5;
+  // One deadline covers DNS, every redirect, and the response body.
+  const timeout = AbortSignal.timeout(options.timeoutMs ?? 10000);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   let current = url;
 
   for (let hop = 0; ; hop++) {
+    signal.throwIfAborted();
     let parsed: URL;
     try {
       parsed = new URL(current);
@@ -170,11 +175,12 @@ export async function safeFetchText(url: string, options: SafeFetchOptions = {})
       throw new UnsafeUrlError(`unsupported scheme "${parsed.protocol}"`);
     }
     await assertPublicHost(parsed.hostname);
+    signal.throwIfAborted();
 
     const res = await fetch(parsed.toString(), {
       headers: options.headers,
       redirect: 'manual',
-      signal: AbortSignal.timeout(options.timeoutMs ?? 10000),
+      signal,
     });
 
     if (res.status >= 300 && res.status < 400) {

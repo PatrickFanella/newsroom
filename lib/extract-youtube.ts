@@ -29,6 +29,8 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
   };
   if (!id) return empty;
 
+  const deadline = AbortSignal.timeout(20_000);
+  const requestSignal = (ms: number) => AbortSignal.any([deadline, AbortSignal.timeout(ms)]);
   const apiKey = process.env.YOUTUBE_API_KEY;
   const meta = { ...empty };
 
@@ -38,7 +40,7 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
       u.searchParams.set('id', id);
       u.searchParams.set('part', 'snippet,contentDetails');
       u.searchParams.set('key', apiKey);
-      const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
+      const r = await fetch(u, { signal: requestSignal(8000) });
       const data = await r.json();
       const item = data?.items?.[0];
       if (item) {
@@ -64,7 +66,7 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
     try {
       const r = await fetch(
         `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-        { signal: AbortSignal.timeout(6000) },
+        { signal: requestSignal(6000) },
       );
       if (r.ok) {
         const data = await r.json();
@@ -78,7 +80,7 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
   // Duration isn't available via oEmbed, so scrape the watch page when we still
   // don't have it (e.g. no API key). Also backfills any missing metadata.
   if (meta.durationSeconds == null) {
-    const scraped = await scrapeWatchPageMeta(url);
+    const scraped = await scrapeWatchPageMeta(url, deadline);
     if (scraped) {
       meta.durationSeconds = meta.durationSeconds ?? scraped.durationSeconds ?? null;
       meta.title = meta.title || scraped.title || null;
@@ -93,7 +95,10 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
   try {
     // Dynamic import to keep cold start light
     const { YoutubeTranscript } = await import('youtube-transcript');
-    const items = await YoutubeTranscript.fetchTranscript(id);
+    const items = await YoutubeTranscript.fetchTranscript(id, {
+      // The package can make several fallback requests; all share the budget.
+      fetch: (input, init) => fetch(input, { ...init, signal: requestSignal(8_000) }),
+    });
     if (items && items.length) {
       meta.transcript = items.map((i: { text: string }) => i.text).join(' ').slice(0, 8000);
     }
@@ -152,7 +157,7 @@ function extractJsonAfter(html: string, marker: string): string | null {
 
 // Scrape a single video's watch page for metadata (notably duration) when the
 // YouTube API key isn't available. No key needed.
-async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | null> {
+async function scrapeWatchPageMeta(url: string, signal: AbortSignal): Promise<Partial<YouTubeMeta> | null> {
   try {
     // Host here is always youtube.com/youtu.be — detectKind already
     // confirmed that before this was ever called — so safeFetchText's SSRF
@@ -164,6 +169,7 @@ async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | 
         'Accept-Language': 'en-US,en;q=0.9',
         Cookie: 'SOCS=CAI; CONSENT=YES+1',
       },
+      signal,
       maxBytes: 5 * 1024 * 1024,
       timeoutMs: 10000,
     });

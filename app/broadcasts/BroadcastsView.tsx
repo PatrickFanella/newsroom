@@ -96,7 +96,7 @@ export function BroadcastsView({ streamId, canManage, displayName, broadcastId }
             </div>
             {canManage && broadcast.ended_at && <PublishEpisode key={broadcast.id+'-publish'} id={broadcast.id} title={broadcast.title} initialToken={broadcast.public_token}/>}
             {canManage && broadcast.ended_at && <CarryForward key={broadcast.id+'-carry'} detail={{broadcast,notes}}/>}
-            {canManage && broadcast.ended_at && <ShowDiscordExport key={broadcast.id} id={broadcast.id}/>}
+            {canManage && broadcast.ended_at && <ShowDiscordExport key={broadcast.id+'-discord'} id={broadcast.id}/>}
             <h3 className="font-display text-xl font-bold mt-6 mb-3">Covered stories</h3>
             {notes.length === 0 ? <p className="text-sm text-ink/60">No items marked played in this show yet.</p> : <ol className="space-y-5">
               {notes.map((note) => {

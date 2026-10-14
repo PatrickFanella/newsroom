@@ -66,8 +66,8 @@ begin
     assert (select count(*) = 0 from show_notes where submission_id = item_id and cancelled_at is null), 'Undo through review RPC cancels play note';
   end if;
   assert not has_function_privilege('anon','public.set_submission_review_claim(uuid,uuid,text,text,text,uuid,boolean)','EXECUTE'), 'anonymous claim RPC denied';
-  assert not has_function_privilege('authenticated','public.apply_submission_review(uuid,uuid,text,jsonb,integer)','EXECUTE'), 'direct client patch RPC denied';
-  assert has_function_privilege('service_role','public.apply_submission_review(uuid,uuid,text,jsonb,integer)','EXECUTE'), 'server patch allowed';
+  assert not has_function_privilege('authenticated','public.apply_submission_review(uuid,uuid,text,jsonb,integer,text)','EXECUTE'), 'direct client patch RPC denied';
+  assert has_function_privilege('service_role','public.apply_submission_review(uuid,uuid,text,jsonb,integer,text)','EXECUTE'), 'server patch allowed';
 end
 $$;
 rollback;

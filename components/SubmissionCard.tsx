@@ -55,6 +55,7 @@ type Submission = ReviewState & {
   // "Watching:" chat post — see lib/title-override.ts.
   title_override: string | null;
   enrichment_state?: EnrichmentState;
+  enrichment_error?: string | null;
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -169,7 +170,7 @@ export function SubmissionCard({
             {s.summary || s.description}
           </p>
         )}
-        <EnrichmentStatus key={`${s.id}:${s.enrichment_state}`} id={s.id} state={s.enrichment_state} retryable={s.status === 'approved'} />
+        <EnrichmentStatus key={`${s.id}:${s.enrichment_state}`} id={s.id} state={s.enrichment_state} error={s.enrichment_error} retryable={s.status === 'approved'} />
         {!compact && s.topics && s.topics.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {s.topics.map((t) => (

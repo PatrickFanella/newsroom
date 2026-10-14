@@ -173,6 +173,7 @@ export async function PATCH(req: NextRequest) {
     .eq('id', id).eq('stream_id', session.streamId).maybeSingle();
   if (readError) return NextResponse.json({ error: 'Could not load the item.' }, { status: 500 });
   if (!current) return NextResponse.json({ error: 'Item not found.' }, { status: 404 });
+  if (body.expectedStatus && current.status !== body.expectedStatus) return NextResponse.json({ error: 'Lead item changed. Refresh before approving.' }, { status: 409 });
   const conflict = reviewConflict(current, session.accountId, expectedRevision);
   if (conflict) return NextResponse.json({ error: conflict, detail: reviewConflictMessage(conflict) }, { status: 409 });
 

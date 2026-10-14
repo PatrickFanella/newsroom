@@ -21,12 +21,11 @@ npx supabase link --project-ref <ref>
 # Mark the baseline as already applied, without running it.
 npx supabase migration repair --status applied 20260909182636
 
-# Now push the migrations that come after it — right now, just the one
-# adding queue_overview() (see app/api/queue/route.ts for why).
+# Review migration history, then push the migrations that come after it.
 npx supabase db push
 ```
 
-After that, `supabase migration list` should show both migrations as
+After that, `supabase migration list` should show the reviewed migrations as
 applied on both local history and the remote project, and you're on the
 normal workflow below.
 
@@ -194,11 +193,11 @@ Bundle creation locks the lead row, so duplicate requests return the same
 bundle. Edits lock the bundle row and reject stale revisions. The API supplies
 the channel from the signed session and requires existing curation permission
 for mutations. Queue approval can include an expected status, checked before
-external work and again in the final conditional write.
+external work and again inside the final locked review transaction.
 
-A submission trigger captures bundle context at the play write. The main
-queue route carries that returned snapshot into its later note insertion;
-the note trigger also supports atomic play-history inserts. This prevents
+A submission trigger captures bundle context at the play write. The atomic
+play-history trigger inserts the note in that same transaction, and the note
+trigger stamps the captured bundle version. This prevents
 intervening bundle edits from changing the play's recorded context. Clearing
 a lead sets its bundle reference to null while retaining lead metadata and
 show/note snapshots. Bundle history uses 50-item timestamp/UUID pages.
@@ -207,3 +206,24 @@ Apply this migration after `20261014010000_broadcast_sessions.sql`. Run
 `psql -v ON_ERROR_STOP=1 -f supabase/tests/story_bundles.sql` in a disposable
 database to check isolation, idempotency, conflicts, snapshots, retention,
 pagination, and privileges. Its fixtures roll back.
+
+## Complete feature integration
+
+Apply all pending migrations in timestamp order through
+`20261014150000_feature_integration.sql` before deploying the combined application.
+That final migration composes review status fencing, audit attribution, and atomic
+play history; it replaces the five-argument review RPC with a six-argument RPC.
+Deploy the matching application after this migration. The sixth argument is
+optional for older revision-aware callers. Older applications that insert play
+notes themselves still need the play-history rollback review described above.
+
+The integration also snapshots preparation and segment timing at show start.
+Usage-blocked enrichment remains skipped until a manual retry; automatic recovery
+continues to recover queued or interrupted jobs. Intentionally skipped tweets do
+not become retryable.
+
+Feature-specific rollout details live in [PREPARATION_TEMPLATES.md](PREPARATION_TEMPLATES.md),
+[TIMING_TARGETS.md](TIMING_TARGETS.md), and the documents in [docs](../docs/):
+usage budgets, moderator activity, broadcast history search, Discord exports,
+carry forward, public episodes, and automatic Twitch shows. The CI database job applies every migration to an
+empty PostgreSQL 17 fixture and runs every SQL contract with rollback.

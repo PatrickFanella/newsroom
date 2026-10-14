@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { PATCH } from './route';
 
-const mocks = vi.hoisted(() => ({ session: vi.fn(), from: vi.fn(), broadcast: vi.fn(), enrich: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), from: vi.fn(), rpc: vi.fn(), broadcast: vi.fn(), enrich: vi.fn() }));
 vi.mock('@/lib/session', () => ({ getApprovedSession: mocks.session, getSession: mocks.session, sessionLogin: () => 'streamer' }));
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: () => ({ from: mocks.from }) }));
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: () => ({ from: mocks.from, rpc: mocks.rpc }) }));
+vi.mock('@/lib/submission-enrichment', () => ({ processSubmissionEnrichment: vi.fn(), recoverSubmissionEnrichment: vi.fn() }));
+vi.mock('@vercel/functions', () => ({waitUntil: vi.fn()}));
 vi.mock('@/lib/extract', () => ({ runAiEnrichment: mocks.enrich }));
 vi.mock('@/lib/realtime', () => ({ broadcastQueueChange: mocks.broadcast }));
 let patch: Record<string, unknown>;
@@ -16,7 +18,9 @@ const request = (body: Record<string, unknown>) => new NextRequest('http://local
 
 beforeEach(() => {
   vi.resetAllMocks(); patch = {}; filters = {}; writeError = null;
-  mocks.session.mockResolvedValue({ streamId: 'stream-1', role: 'streamer', displayName: 'Streamer' });
+  mocks.session.mockResolvedValue({ streamId: 'stream-1', accountId: 'owner', role: 'streamer', displayName: 'Streamer' });
+  mocks.rpc.mockImplementation(async (_name, args) => { patch=args.p_patch; filters.stream_id=args.p_stream_id; return {data:{submission:{id:'submission-1',status:patch.status,summary:'Saved summary',played_at:'2026-10-13T22:00:00Z'}},error:writeError}; });
+  let reads = 0;
   mocks.from.mockImplementation((table: string) => {
     if (table === 'show_notes') throw new Error('The API must not write a second note outside the play transaction');
     const chain = {
@@ -24,7 +28,7 @@ beforeEach(() => {
       update: (value: Record<string, unknown>) => { patch = value; return chain; },
       eq: (key: string, value: unknown) => { filters[key] = value; return chain; },
       neq: () => chain, limit: () => chain,
-      maybeSingle: async () => ({ data: null, error: null }),
+      maybeSingle: async () => ({ data: reads++ === 0 ? {id:'submission-1',status:'approved',editorial_revision:0} : null, error: null }),
       single: async () => ({ data: { id: 'submission-1', status: patch.status, kind: 'youtube', summary: 'Saved summary', played_at: '2026-10-13T22:00:00Z' }, error: writeError }),
     };
     return chain;
@@ -49,7 +53,7 @@ describe('transactional play history API', () => {
 
   it('returns failure when the database cannot commit the play and its note', async () => {
     writeError = { message: 'Injected transactional note failure' };
-    expect((await PATCH(request({ status: 'played' }))).status).toBe(500);
+    expect((await PATCH(request({ status: 'played' }))).status).toBe(503);
     expect(mocks.broadcast).not.toHaveBeenCalled();
   });
 

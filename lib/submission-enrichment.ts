@@ -28,8 +28,8 @@ export async function claimSubmissionEnrichment(
 export async function runSubmissionEnrichment(job: EnrichmentJob): Promise<void> {
   const sb = supabaseAdmin();
   try {
-    const { fields, failureReason } = await extractSubmissionFields(job, true);
-    if (!failureReason && job.kind === 'article' && !job.related_coverage && (fields.title || job.title)) {
+    const { fields, failureReason, skippedReason } = await extractSubmissionFields(job, true);
+    if (!failureReason && !skippedReason && job.kind === 'article' && !job.related_coverage && (fields.title || job.title)) {
       const { data: settings } = await sb.from('streams').select('preferred_sources')
         .eq('id', job.stream_id).single();
       fields.related_coverage = await searchRelatedCoverage({
@@ -40,8 +40,8 @@ export async function runSubmissionEnrichment(job: EnrichmentJob): Promise<void>
     }
     const { error } = await sb.from('submissions').update({
       ...fields,
-      enrichment_state: failureReason ? 'failed' : job.kind === 'twitter' ? 'skipped' : 'complete',
-      enrichment_error: failureReason ? 'Enrichment could not finish. You can retry it.' : null,
+      enrichment_state: failureReason ? 'failed' : skippedReason || job.kind === 'twitter' ? 'skipped' : 'complete',
+      enrichment_error: failureReason ? 'Enrichment could not finish. You can retry it.' : skippedReason ?? null,
       enrichment_token: null,
       enrichment_updated_at: new Date().toISOString(),
     }).eq('id', job.id).eq('stream_id', job.stream_id).eq('enrichment_token', job.enrichment_token);

@@ -122,7 +122,7 @@ export type EnrichedFields = {
   dmcaRisk: 'low' | 'medium' | 'high';
   evidence?: EnrichmentEvidence;
   contentWarning: string | null; // human-readable reason, or null
-  failureReason?: string;
+  failureReason?: string; skippedReason?: string;
 };
 
 /**
@@ -169,5 +169,6 @@ export async function enrichExtractedMeta(input: {
     dmcaRisk: enriched.dmcaRisk || hostDMCARisk(input.url),
     contentWarning,
     failureReason: enriched.failureReason,
+    skippedReason: 'skippedReason' in enriched ? enriched.skippedReason : undefined,
   };
 }

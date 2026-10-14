@@ -6,10 +6,10 @@ import { EnrichmentStatus, type EnrichmentState } from './EnrichmentStatus';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function show(state: EnrichmentState, retryable = true) {
+function show(state: EnrichmentState, retryable = true, error?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(client, 'invalidateQueries');
-  render(<QueryClientProvider client={client}><EnrichmentStatus id="submission-1" state={state} retryable={retryable} /></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><EnrichmentStatus id="submission-1" state={state} retryable={retryable} error={error} /></QueryClientProvider>);
   return invalidate;
 }
 
@@ -23,6 +23,12 @@ describe('EnrichmentStatus', () => {
     show(state);
     expect(screen.getByRole('status')).toHaveTextContent(label);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('shows allowance skips with a manual retry but hides intentional skips', () => {
+    show('skipped',true,'Usage allowance exhausted');
+    expect(screen.getByRole('status')).toHaveTextContent('check usage settings');
+    expect(screen.getByRole('button',{name:'Retry enrichment'})).toBeEnabled();
   });
 
   it('starts a retry and refreshes queue state without approving again', async () => {

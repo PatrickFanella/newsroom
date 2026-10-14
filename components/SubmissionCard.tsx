@@ -7,9 +7,13 @@ import { Badge } from './ui/badge';
 import { SimpleTooltip } from './ui/tooltip';
 import { ArchiveButton } from './ArchiveButton';
 import { TriggerWarningBanner } from './TriggerWarning';
+import { EnrichmentEvidence } from './EnrichmentEvidence';
+import type { EnrichmentEvidence as Evidence } from '@/lib/enrichment-evidence';
 
 type Submission = {
   id: string;
+  extraction_evidence?: Evidence | null;
+  summary_evidence?: Evidence | null;
   url: string;
   kind: string;
   status: string;
@@ -168,6 +172,7 @@ export function SubmissionCard({
             ))}
           </div>
         )}
+        <EnrichmentEvidence summary={s.summary} extraction_evidence={s.extraction_evidence} summary_evidence={s.summary_evidence} />
         <div className="mt-1">
           <ArchiveButton id={s.id} url={s.url} archiveUrl={s.archive_url} />
         </div>

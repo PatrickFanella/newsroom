@@ -3,6 +3,7 @@ import { hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
 import { recordUsage } from './usage';
 import { extractMetaForKind, enrichExtractedMeta } from './extract-kind';
+import { inputEvidence } from './enrichment-evidence';
 
 // Split into two phases, run at two different moments:
 //
@@ -61,6 +62,7 @@ async function extractAndWrite(submissionId: string, includeAi: boolean): Promis
       (await extractMetaForKind(sub.url, 'article'))!;
 
     const patch: Record<string, unknown> = {
+      extraction_evidence: inputEvidence(meta.evidenceSource ?? 'unavailable', meta.bodyText),
       title: meta.title,
       description: meta.description,
       thumbnail_url: meta.thumbnail,
@@ -79,6 +81,7 @@ async function extractAndWrite(submissionId: string, includeAi: boolean): Promis
         meta,
         streamId: sub.stream_id,
       });
+      patch.summary_evidence = enriched.evidence;
       patch.summary = enriched.summary;
       patch.credibility_tag = enriched.credibility;
       patch.topics = enriched.topics;
@@ -109,6 +112,8 @@ async function extractAndWrite(submissionId: string, includeAi: boolean): Promis
   } catch (err) {
     console.error(`${includeAi ? 'AI enrichment' : 'extraction'} failed for`, submissionId, err);
     await sb.from('submissions').update({
+      extraction_evidence: inputEvidence('unavailable', null, 'failed'),
+      ...(includeAi ? { summary_evidence: inputEvidence('unavailable', null, 'failed') } : {}),
       dmca_risk: hostDMCARisk(sub.url),
       mod_notes: includeAi ? 'enrichment failed' : 'extraction failed',
     }).eq('id', sub.id);

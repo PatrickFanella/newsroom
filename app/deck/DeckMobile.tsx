@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
+import { EnrichmentEvidence } from '@/components/EnrichmentEvidence';
 import { formatClock, formatDuration, kindTint } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -458,6 +459,7 @@ export function DeckMobile({
                 {active.summary || active.description}
               </p>
             )}
+            <EnrichmentEvidence summary={active.summary} extraction_evidence={active.extraction_evidence} summary_evidence={active.summary_evidence} />
 
             <a
               href={active.url}

@@ -9,6 +9,7 @@
 // move only; no rendered output changed.
 
 import type { Submission } from '@/components/SubmissionCard';
+import { EnrichmentEvidence } from '@/components/EnrichmentEvidence';
 import { extractYouTubeId, formatDuration, formatDate, formatClock } from '@/lib/url';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { Icon } from '@/components/ui/icon';
@@ -128,6 +129,8 @@ export function ActiveItemCard({
           {active.summary || active.description}
         </p>
       )}
+
+      <EnrichmentEvidence summary={active.summary} extraction_evidence={active.extraction_evidence} summary_evidence={active.summary_evidence} />
 
       {active.mod_notes && (
         <div className="max-w-3xl mb-6 border-l-4 border-ochre bg-ochre/10 px-4 py-3">

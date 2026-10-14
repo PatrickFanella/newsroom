@@ -100,6 +100,25 @@ No new environment variables.
 7. When the streamer hits **Played**, the item is timestamped and copied to `show_notes`.
 8. Export to Markdown anytime from `/api/notes?format=markdown`, or post the played list to a Discord channel from Setup → Account or the deck header.
 
+## Enrichment input evidence
+
+Moderator cards and both deck layouts show a collapsible input-evidence
+panel. It distinguishes page metadata, transcript excerpts, descriptions or
+captions, post text, and unavailable content. Article enrichment records a
+successful provider page fetch only when the provider returns a fetch-result
+block; a requested tool call or a model's claim to have read a page is not
+counted as retrieval. A retrieved page may still be incomplete or paywalled.
+
+The input used for AI analysis is kept separately from later basic extraction.
+The record includes the input type, bounded supplied-text count, analysis
+outcome, model, and observed retrieval URL/time. It stores no article body,
+transcript, provider response, or raw error text. Historical summaries remain
+**Input not recorded**. These records describe provenance; they do not verify
+factual claims or establish copyright clearance. Shelf copies do not yet carry
+this queue-item evidence.
+
+Apply `20261014040000_enrichment_evidence.sql` before deploying.
+
 ## Architectural choices &amp; trade-offs
 
 - **Chat capture uses Twitch EventSub webhooks.** Twitch pushes chat messages to our API endpoint via HTTP — no persistent connection, no separate worker, runs entirely on Vercel. Links are captured even if nobody has the app open.

@@ -49,3 +49,12 @@ Postgres version (`show server_version;` on the remote database) if it
 ever drifts from the default. Nothing here requires the local dev stack
 (`supabase start`, Docker) — the app talks to the hosted project directly,
 the CLI is only used for `migration`/`db push`/`link`.
+
+## Enrichment evidence
+
+`20261014040000_enrichment_evidence.sql` adds nullable extraction and summary
+input-evidence JSON to submissions. Existing rows remain null. Basic
+extraction updates only extraction evidence; AI analysis writes its own input
+record alongside the generated fields, so late basic metadata cannot relabel
+a summary's inputs. Apply the migration before deploying extraction changes.
+Evidence records contain bounded metadata rather than fetched content.

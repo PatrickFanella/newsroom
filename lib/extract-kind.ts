@@ -24,6 +24,7 @@ import { extractTwitter } from './extract-twitter';
 import { extractTikTok } from './extract-tiktok';
 import { enrichContent, hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
+import { inputEvidence, type EvidenceSource, type EnrichmentEvidence } from './enrichment-evidence';
 
 export type ExtractedMeta = {
   title: string | null;
@@ -34,6 +35,7 @@ export type ExtractedMeta = {
   publishedAt: string | null;
   duration: number | null;
   bodyText: string | null;
+  evidenceSource?: EvidenceSource;
 };
 
 /**
@@ -62,7 +64,8 @@ export async function extractMetaForKind(url: string, kind: string): Promise<Ext
         author: null,
         publishedAt: meta.publishedAt,
         duration: meta.durationSeconds,
-        bodyText: [meta.description, meta.transcript].filter(Boolean).join('\n\n'),
+        bodyText: [meta.transcript, meta.description].filter(Boolean).join('\n\n'),
+        evidenceSource: meta.transcript?.trim() ? 'transcript' : meta.description?.trim() ? 'description' : 'unavailable',
       };
     }
     case 'twitter': {
@@ -76,6 +79,7 @@ export async function extractMetaForKind(url: string, kind: string): Promise<Ext
         publishedAt: null,
         duration: null,
         bodyText: meta.description,
+        evidenceSource: meta.description?.trim() ? 'post_text' : 'unavailable',
       };
     }
     case 'tiktok': {
@@ -89,6 +93,7 @@ export async function extractMetaForKind(url: string, kind: string): Promise<Ext
         publishedAt: meta.publishedAt,
         duration: meta.durationSeconds,
         bodyText: meta.description,
+        evidenceSource: meta.description?.trim() ? 'description' : 'unavailable',
       };
     }
     case 'article': {
@@ -102,6 +107,7 @@ export async function extractMetaForKind(url: string, kind: string): Promise<Ext
         publishedAt: meta.publishedAt,
         duration: null,
         bodyText: meta.description,
+        evidenceSource: meta.title || meta.description ? 'page_metadata' : 'unavailable',
       };
     }
     default:
@@ -114,6 +120,7 @@ export type EnrichedFields = {
   credibility: string | null;
   topics: string[] | null;
   dmcaRisk: 'low' | 'medium' | 'high';
+  evidence?: EnrichmentEvidence;
   contentWarning: string | null; // human-readable reason, or null
 };
 
@@ -143,6 +150,7 @@ export async function enrichExtractedMeta(input: {
           publisher: input.meta.publisher,
           body: input.meta.bodyText,
           kind: input.kind,
+          evidenceSource: input.meta.evidenceSource,
           streamId: input.streamId,
         });
 
@@ -153,6 +161,7 @@ export async function enrichExtractedMeta(input: {
     (enriched.contentWarning ? 'Possible graphic content (AI-flagged)' : null);
 
   return {
+    evidence: 'evidence' in enriched ? enriched.evidence : inputEvidence(input.meta.evidenceSource ?? 'unavailable', input.meta.bodyText, 'skipped'),
     summary: enriched.summary,
     credibility: enriched.credibility,
     topics: enriched.topics,

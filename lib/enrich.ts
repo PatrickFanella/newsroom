@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { recordUsage } from './usage';
+import { inputEvidence, observedPageFetch, type EvidenceSource, type EnrichmentEvidence } from './enrichment-evidence';
 
 export type EnrichmentResult = {
   summary: string | null;
@@ -7,6 +8,7 @@ export type EnrichmentResult = {
   topics: string[];
   dmcaRisk: 'low' | 'medium' | 'high' | null;
   contentWarning: boolean;
+  evidence?: EnrichmentEvidence;
 };
 
 function getClient(): Anthropic | null {
@@ -75,6 +77,7 @@ export async function enrichContent(input: {
   publisher: string | null;
   body: string | null; // article body OR youtube description+transcript
   kind?: string | null; // media kind — 'article' switches to the web_fetch path below
+  evidenceSource?: EvidenceSource;
   streamId?: string | null; // for usage metering
 }): Promise<EnrichmentResult> {
   const client = getClient();
@@ -88,6 +91,8 @@ export async function enrichContent(input: {
   // kind (YouTube's transcript, TikTok's caption) already supplies real
   // content as `body`, so those keep the original text-only path.
   const isArticle = input.kind === 'article';
+  const evidence = inputEvidence(input.evidenceSource ?? (isArticle ? 'page_metadata' : input.body ? 'description' : 'unavailable'), input.body, 'skipped');
+  if (isArticle) evidence.retrieval = 'not_observed';
 
   if (!client || (!isArticle && !input.body)) {
     return {
@@ -96,6 +101,7 @@ export async function enrichContent(input: {
       topics: [],
       dmcaRisk: hostRisk,
       contentWarning: false,
+      evidence,
     };
   }
 
@@ -148,12 +154,15 @@ ${input.body!.slice(0, 5500)}`;
       messages: [{ role: 'user', content: userText }],
     });
 
+    evidence.model = MODEL;
+    if (isArticle) Object.assign(evidence, observedPageFetch(resp.content));
+
     // Safety classifiers can decline instead of erroring (HTTP 200,
     // stop_reason "refusal") — treat that the same as a failed call rather
     // than trying to parse content that may not be JSON.
     if (resp.stop_reason === 'refusal') {
       console.warn('enrichContent refused for', input.url);
-      return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
+      return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, evidence: { ...evidence, outcome: 'refused' } };
     }
 
     // Record the AI cost as soon as the call returns — the tokens are billed
@@ -175,7 +184,9 @@ ${input.body!.slice(0, 5500)}`;
       .map((b) => (b as { type: 'text'; text: string }).text)
       .join('');
     const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    let parsed;
+    try { parsed = JSON.parse(clean); if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid enrichment result'); }
+    catch { return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, evidence: { ...evidence, outcome: 'invalid_response' } }; }
     // Combine model-suggested DMCA risk with host heuristic — take the higher
     const modelRisk = (parsed.dmca_risk as 'low' | 'medium' | 'high' | undefined) || 'low';
     const order = { low: 0, medium: 1, high: 2 };
@@ -186,9 +197,10 @@ ${input.body!.slice(0, 5500)}`;
       topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 6) : [],
       dmcaRisk: finalRisk,
       contentWarning: parsed.content_warning === true,
+      evidence: { ...evidence, outcome: 'succeeded' },
     };
   } catch (err) {
     console.error('enrichContent failed', err);
-    return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
+    return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, evidence: { ...evidence, outcome: 'failed' } };
   }
 }

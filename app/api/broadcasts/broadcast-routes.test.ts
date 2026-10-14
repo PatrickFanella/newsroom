@@ -57,10 +57,10 @@ describe('broadcast API authorization and actions', () => {
 
 describe('broadcast history and repeatable downloads', () => {
   it('uses a timestamp and id cursor to paginate tied starts', async () => {
-    const rows = Array.from({ length: 50 }, () => ({ id, started_at: broadcast.started_at }));
+    const rows = Array.from({ length: 51 }, () => ({ id, started_at: broadcast.started_at }));
     mocks.rpc.mockResolvedValue({ data: rows, error: null });
     const response = await list(request('GET', undefined, `?before=${encodeURIComponent(`${broadcast.started_at}|${id}`)}`));
-    expect(mocks.rpc).toHaveBeenCalledWith('list_broadcasts', { p_stream_id: owner.streamId, p_before: broadcast.started_at, p_before_id: id, p_active: false });
+    expect(mocks.rpc).toHaveBeenCalledWith('search_broadcast_history', { p_stream_id: owner.streamId, p_before: broadcast.started_at, p_before_id: id, p_query:'',p_state:'all',p_from:null,p_until:null });
     expect((await response.json()).nextCursor).toBe(`${broadcast.started_at}|${id}`);
   });
   it.each(['?before=invalid', '?before=2026-10-14T00:00:00Z%7Cinvalid', `?active=1&before=${broadcast.started_at}%7C${id}`])('rejects cursor %s', async (query) => {

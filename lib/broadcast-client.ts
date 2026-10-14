@@ -1,11 +1,13 @@
+import type { BroadcastFilters } from './broadcast-search';
 import type { BroadcastDetail, BroadcastSummary } from './broadcast';
 
 export type BroadcastPage = { broadcasts: BroadcastSummary[]; nextCursor: string | null };
 
-export async function loadBroadcasts(cursor: string | null = null, active = false): Promise<BroadcastPage> {
+export async function loadBroadcasts(cursor: string | null = null, active = false, filters: BroadcastFilters = {}): Promise<BroadcastPage> {
   const params = new URLSearchParams();
   if (cursor) params.set('before', cursor);
   if (active) params.set('active', '1');
+  for (const [key,value] of Object.entries(filters)) if (value) params.set(key,value);
   const response = await fetch(`/api/broadcasts?${params}`);
   if (!response.ok) throw new Error('Could not load shows.');
   const data = await response.json();

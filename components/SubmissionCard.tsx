@@ -7,8 +7,9 @@ import { Badge } from './ui/badge';
 import { SimpleTooltip } from './ui/tooltip';
 import { ArchiveButton } from './ArchiveButton';
 import { TriggerWarningBanner } from './TriggerWarning';
+import type { ReviewState } from '@/lib/review-coordination';
 
-type Submission = {
+type Submission = ReviewState & {
   id: string;
   url: string;
   kind: string;

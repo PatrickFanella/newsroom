@@ -7,6 +7,7 @@ import { runAiEnrichment } from '@/lib/extract';
 import { normalizeTitleOverride } from '@/lib/title-override';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
+import { expectedReviewRevision, reviewConflict, reviewConflictMessage } from '@/lib/review-coordination';
 
 export const maxDuration = 30;
 
@@ -137,7 +138,11 @@ export async function PATCH(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
+  let expectedRevision: number | null;
+  try { expectedRevision = expectedReviewRevision(body); }
+  catch { return NextResponse.json({ error: 'Invalid item revision.' }, { status: 400 }); }
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
 
@@ -148,6 +153,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
+  const sb = supabaseAdmin();
+  // Fail before external work when the caller already has a stale snapshot.
+  // The RPC repeats both checks while holding the row lock at commit time.
+  const { data: current, error: readError } = await sb.from('submissions').select('*')
+    .eq('id', id).eq('stream_id', session.streamId).maybeSingle();
+  if (readError) return NextResponse.json({ error: 'Could not load the item.' }, { status: 500 });
+  if (!current) return NextResponse.json({ error: 'Item not found.' }, { status: 404 });
+  const conflict = reviewConflict(current, session.accountId, expectedRevision);
+  if (conflict) return NextResponse.json({ error: conflict, detail: reviewConflictMessage(conflict) }, { status: 409 });
+
+  if (body.status && !['pending', 'approved', 'played', 'rejected'].includes(body.status)) return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
   const patch: Record<string, unknown> = {};
   if (body.status) {
     patch.status = body.status;
@@ -169,7 +185,7 @@ export async function PATCH(req: NextRequest) {
     if (body.status === 'played') patch.played_at = new Date().toISOString();
   }
   if (typeof body.position === 'number') patch.position = body.position;
-  if (typeof body.mod_notes === 'string') patch.mod_notes = body.mod_notes;
+  if ('mod_notes' in body) patch.mod_notes = typeof body.mod_notes === 'string' ? body.mod_notes : null;
   // Unlike mod_notes, this one accepts an explicit null: a trigger warning is
   // published to chat and the on-air overlay, so taking one back off an item
   // has to be as possible as putting it on.
@@ -194,8 +210,6 @@ export async function PATCH(req: NextRequest) {
   // than reorganizing the deck.
   if ('title_override' in body) patch.title_override = normalizeTitleOverride(body.title_override);
   if (typeof body.duration_on_screen_s === 'number') patch.duration_on_screen_s = body.duration_on_screen_s;
-
-  const sb = supabaseAdmin();
 
   // Assign to a segment (or back to ungrouped). Append to the end of the
   // target group so it lands at the bottom of that segment.
@@ -231,11 +245,7 @@ export async function PATCH(req: NextRequest) {
   // articles. YouTube, socials, clips, etc. don't have "other coverage" to
   // find, so searching for them just wastes the search quota.
   if (body.status === 'approved') {
-    const { data: sub } = await sb
-      .from('submissions')
-      .select('title, publisher, url, kind, normalized_url, related_coverage')
-      .eq('id', id)
-      .single();
+    const sub = current;
 
     // The deck must never contain duplicates, regardless of the stream's
     // allow_duplicates setting (which only governs the overall queue). Block
@@ -278,14 +288,14 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  const { data, error } = await sb
-    .from('submissions')
-    .update(patch)
-    .eq('id', id)
-    .eq('stream_id', session.streamId)
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const { data: saved, error } = await sb.rpc('apply_submission_review', {
+    p_stream_id: session.streamId, p_id: id, p_actor_id: session.accountId,
+    p_patch: patch, p_expected_revision: expectedRevision,
+  });
+  if (error) return NextResponse.json({ error: 'Review coordination is temporarily unavailable.' }, { status: 503 });
+  if (saved?.error) return NextResponse.json({ error: saved.error, detail: reviewConflictMessage(saved.error) }, { status: saved.error === 'not_found' ? 404 : 409 });
+  const data = saved?.submission;
+  if (!data) return NextResponse.json({ error: 'Could not save the item.' }, { status: 500 });
 
   // The AI summary/credibility/topics call is deferred to here, rather than
   // running on every pending submission — most links chat posts never get

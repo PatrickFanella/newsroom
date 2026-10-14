@@ -37,6 +37,7 @@ export default async function ModPage() {
         streamDisplayName={stream?.display_name || session.displayName}
         submitCommand={stream?.submit_command || null}
         streamId={session.streamId}
+        actorId={session.accountId}
         isMod={isModRole}
         isAdmin={isAdmin(session.twitchUserId)}
         canCurate={canCurate}

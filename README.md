@@ -100,6 +100,28 @@ No new environment variables.
 7. When the streamer hits **Played**, the item is timestamped and copied to `show_notes`.
 8. Export to Markdown anytime from `/api/notes?format=markdown`, or post the played list to a Discord channel from Setup → Account or the deck header.
 
+## Coordinating moderator reviews
+
+On a pending card, **Start review** reserves triage for you for ten minutes.
+Other reviewers see your name and cannot approve, reject, or edit the item
+through the queue API while the claim is active. **Extend review** adds a
+fresh ten-minute window; **Release review** makes the item available again.
+Claims expire without a background job or automatic renewal. Approving or
+rejecting clears the claim. The channel owner can explicitly release another
+reviewer's claim. Claims are optional; unclaimed items can still be triaged.
+
+Moderator edits and Undo carry the item's editorial revision. If someone
+changes the item first, your action returns a conflict and loads the latest
+card. Open note and warning drafts are kept. Review the changed card before
+using a draft with the latest item, or load the latest saved warning instead.
+Metadata, AI summaries, and archive updates do not invalidate these drafts.
+
+Apply `20261014030000_review_coordination.sql` before deploying this feature.
+Existing clients without a revision remain supported, but only versioned
+requests receive stale-edit protection. All queue PATCH requests respect
+active review claims. Bulk deletion and other maintenance/curation routes
+remain separate operations; a claim is a coordination tool, not a data lock.
+
 ## Architectural choices &amp; trade-offs
 
 - **Chat capture uses Twitch EventSub webhooks.** Twitch pushes chat messages to our API endpoint via HTTP — no persistent connection, no separate worker, runs entirely on Vercel. Links are captured even if nobody has the app open.

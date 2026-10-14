@@ -49,3 +49,31 @@ Postgres version (`show server_version;` on the remote database) if it
 ever drifts from the default. Nothing here requires the local dev stack
 (`supabase start`, Docker) — the app talks to the hosted project directly,
 the CLI is only used for `migration`/`db push`/`link`.
+
+## Review coordination
+
+`20261014030000_review_coordination.sql` adds editorial revisions and review
+lease fields to submissions. `advance_submission_revision` increments the
+revision for status, notes, warning, title override, placement, approval/play
+timing, and approval-attribution changes through any write path. It ignores
+metadata/AI/archive writes and lease changes, and clears claims when an item
+leaves pending.
+
+`set_submission_review_claim` and `apply_submission_review` lock the scoped
+submission row before checking ownership or revision. Claim acquisition and
+editorial writes therefore serialize across competing reviewers. Renewal
+and release require the current lease token, including owner-forced release.
+The server supplies actor identity and channel from the signed session;
+forced release is authorized only for the channel owner. Neither RPC is
+available directly to anonymous or authenticated clients.
+
+Apply the migration before deploying the updated queue PATCH route. Missing
+coordination RPCs fail closed with HTTP 503. Existing unversioned clients
+continue to write through the same RPC and honor claims; they do not gain
+optimistic revision checks. Moderator drafts capture their revision when the
+editor opens, and Undo uses the revision returned by the committed action.
+
+Run `psql -v ON_ERROR_STOP=1 -f supabase/tests/review_coordination.sql` in a
+disposable database after migrations. Its rolled-back fixtures check channel
+isolation, leases, fencing, owner release, stale edits/Undo, editorial versus
+metadata changes, legacy requests, and RPC privileges.

@@ -25,6 +25,11 @@ function makeSub(
 ) {
   return {
     id,
+    editorial_revision: 0,
+    review_claim_actor_id: null,
+    review_claim_display_name: null,
+    review_claim_token: null,
+    review_claim_expires_at: null,
     url: `https://example.com/${id}`,
     kind: 'article',
     status,
@@ -95,6 +100,7 @@ function installMockBackend(
       if (url === '/api/queue' && method === 'PATCH') {
         const body = JSON.parse(String(init?.body || '{}'));
         const item = state.get(body.id);
+        if (item && body.expectedRevision !== undefined && body.expectedRevision !== item.editorial_revision) return jsonResponse({ error: 'stale', detail: 'This item changed elsewhere. Your action was not saved.' }, 409);
         const patch: { id: string; status?: string; segment_id?: string | null } = { id: body.id };
         if (item && typeof body.status === 'string') {
           item.status = body.status;
@@ -103,6 +109,12 @@ function installMockBackend(
         if (item && 'segment_id' in body) {
           item.segment_id = body.segment_id;
           patch.segment_id = body.segment_id;
+        }
+        if (item) {
+          for (const key of ['mod_notes', 'trigger_warning', 'prep_note']) {
+            if (key in body) Object.assign(item, { [key]: body[key] });
+          }
+          item.editorial_revision++;
         }
         patches.push(patch);
         return jsonResponse({ submission: item ?? {} });
@@ -129,6 +141,7 @@ function renderModView(overrides: { isMod?: boolean; canCurate?: boolean } = {})
           streamDisplayName="Some Streamer"
           submitCommand={null}
           streamId="mock-stream"
+          actorId="mod-1"
           isMod={overrides.isMod ?? true}
           canCurate={overrides.canCurate ?? false}
         />
@@ -370,5 +383,65 @@ describe('ModView — copy link', () => {
 
     expect(writeText).toHaveBeenCalledWith('https://example.com/a');
     expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
+  });
+});
+
+
+describe('ModView — coordination and stale drafts', () => {
+  it('disables another reviewer’s claimed item for clicks and keyboard triage', async () => {
+    const backend = installMockBackend([makeSub('a', 'Claimed story', 'pending', { review_claim_actor_id: 'mod-2', review_claim_display_name: 'Other Mod', review_claim_token: 'other-token', review_claim_expires_at: '2099-01-01T00:00:00Z' })]);
+    renderModView(); await screen.findByText('Claimed story');
+    expect(screen.getByText(/Other Mod is reviewing/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^approve$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^reject$/i })).toBeDisabled();
+    await userEvent.keyboard('ar1'); expect(backend.patches).toHaveLength(0);
+  });
+  it('uses the committed revision for Undo instead of the old pending snapshot', async () => {
+    const backend = installMockBackend([makeSub('a', 'Story', 'pending')]);
+    const user = userEvent.setup(); renderModView(); await screen.findByText('Story');
+    await user.click(screen.getByRole('button', { name: /^approve$/i }));
+    await user.click(await screen.findByRole('button', { name: /undo/i }));
+    expect(await screen.findByText('Story')).toBeInTheDocument();
+    const writes = vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([, init]) => JSON.parse(String(init?.body)));
+    expect(writes.map(body => body.expectedRevision)).toEqual([0, 1]);
+    expect(backend.state.get('a')?.status).toBe('pending');
+  });
+  it('does not Undo an approval after newer editorial work', async () => {
+    const backend = installMockBackend([makeSub('a', 'Story', 'pending')]);
+    const user = userEvent.setup(); renderModView(); await screen.findByText('Story');
+    await user.click(screen.getByRole('button', { name: /^approve$/i }));
+    await screen.findByRole('button', { name: /undo/i });
+    backend.state.get('a')!.editorial_revision++;
+    await user.click(screen.getByRole('button', { name: /undo/i }));
+    await screen.findAllByText(/Your action was not saved/);
+    expect(backend.state.get('a')?.status).toBe('approved');
+    expect(backend.patches).not.toContainEqual({ id: 'a', status: 'pending' });
+  });
+  it('keeps an older warning draft through conflict/refetch until the user reconciles it', async () => {
+    const backend = installMockBackend([makeSub('a', 'Story', 'pending')]);
+    const user = userEvent.setup(); renderModView(); await screen.findByText('Story');
+    await user.click(screen.getByRole('button', { name: /add trigger warning/i }));
+    const input = screen.getByPlaceholderText(/graphic footage/i); await user.type(input, 'My draft warning');
+    Object.assign(backend.state.get('a')!, { trigger_warning: 'Newer saved warning', editorial_revision: 1 });
+    await user.click(screen.getByRole('button', { name: 'Save warning' }));
+    await screen.findByText('Latest saved warning: Newer saved warning');
+    expect(input).toHaveValue('My draft warning'); expect(backend.state.get('a')?.trigger_warning).toBe('Newer saved warning');
+    await user.click(screen.getByRole('button', { name: 'Use draft with latest item' }));
+    await user.click(screen.getByRole('button', { name: 'Save warning' }));
+    await waitFor(() => expect(backend.state.get('a')?.trigger_warning).toBe('My draft warning'));
+  });
+  it('keeps a moderator note tied to the revision when its editor opened', async () => {
+    const backend = installMockBackend([makeSub('a', 'Story', 'pending')]);
+    const user = userEvent.setup(); renderModView(); await screen.findByText('Story');
+    await user.click(screen.getByRole('button', { name: /add note/i }));
+    await user.type(screen.getByPlaceholderText(/skip to/i), 'My note');
+    Object.assign(backend.state.get('a')!, { mod_notes: 'Other note', editorial_revision: 1 });
+    await user.click(screen.getByRole('button', { name: /^approve$/i }));
+    await screen.findByText(/Review the updated card before using your note/);
+    expect(backend.state.get('a')?.status).toBe('pending'); expect(screen.getByPlaceholderText(/skip to/i)).toHaveValue('My note');
+    await user.click(screen.getByRole('button', { name: 'Use note with latest item' }));
+    await user.click(screen.getByRole('button', { name: /^approve$/i }));
+    await waitFor(() => expect(backend.state.get('a')?.status).toBe('approved'));
+    expect(backend.state.get('a')?.mod_notes).toBe('My note');
   });
 });

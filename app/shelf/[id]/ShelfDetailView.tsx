@@ -34,9 +34,10 @@ import {
 import { SendToDeckMenu, type DeckSegment } from './SendToDeckMenu';
 import { type ShelfItem } from './SortableItemRow';
 import { ShelfSegmentBlock } from './ShelfSegmentBlock';
+import { PreparationTemplateControls } from './PreparationTemplateControls';
 
 type ShelfSegment = { id: string; name: string; position: number };
-type ShelfMeta = { id: string; name: string; share_token: string | null; ungrouped_position: number };
+type ShelfMeta = { id: string; name: string; share_token: string | null; ungrouped_position: number; is_template?: boolean; prep_prompt?: string };
 type ShelfData = { list: ShelfMeta; items: ShelfItem[]; segments: ShelfSegment[] };
 
 async function fetchShelf(shelfId: string): Promise<ShelfData> {
@@ -602,6 +603,15 @@ export function ShelfDetailView({
             )}
           </div>
         )}
+
+        {shelf && <PreparationTemplateControls
+          shelfId={shelfId} name={shelf.name} isTemplate={shelf.is_template === true}
+          prepPrompt={shelf.prep_prompt ?? ''} canCurate={canCurate}
+          onChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: shelfKey });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.shelves() });
+          }}
+        />}
 
         <div className="flex items-center gap-3 mb-6 flex-wrap">
           <span className="font-mono text-xs uppercase tracking-widest text-ink/60">

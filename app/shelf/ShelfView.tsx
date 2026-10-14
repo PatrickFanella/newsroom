@@ -36,6 +36,7 @@ type ShelfSummary = {
   name: string;
   position: number;
   share_token: string | null;
+  is_template: boolean;
   created_at: string;
   updated_at: string;
   item_count: number;
@@ -81,6 +82,7 @@ function SortableShelfRow({
         <Link href={`/shelf/${shelf.id}`} className="min-w-0 flex-1">
           <div className="font-display text-lg font-bold leading-tight truncate">{shelf.name}</div>
           <div className="font-mono text-xs text-ink/50 mt-0.5">
+            {shelf.is_template && <span className="text-moss">Preparation template · </span>}
             {shelf.item_count} item{shelf.item_count === 1 ? '' : 's'} · updated {relativeTime(shelf.updated_at)}
             {shelf.share_token && <span className="text-moss"> · shared</span>}
           </div>
@@ -89,7 +91,7 @@ function SortableShelfRow({
           href={`/shelf/${shelf.id}`}
           className="shrink-0 font-mono text-xs uppercase tracking-widest underline hover:text-rust"
         >
-          Open →
+          {shelf.is_template ? 'Use template →' : 'Open →'}
         </Link>
         {canCurate && (
           <button
@@ -227,7 +229,8 @@ export function ShelfView({
           <p className="text-sm text-ink/60 max-w-xl">
             Durable, named lists of content — independent of today&apos;s run of show. Shelve
             something here when it&apos;s worth keeping but not for today, then send it to the
-            deck whenever it&apos;s time.
+            deck whenever it&apos;s time. Mark a shelf as a preparation template to create
+            a fresh working copy for each show, with reusable segments, links, and prompts.
           </p>
         </div>
 

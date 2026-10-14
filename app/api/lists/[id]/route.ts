@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
+import { parsePreparationPatch } from '@/lib/preparation-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const sb = supabaseAdmin();
   const { data: list, error } = await sb
     .from('lists')
-    .select('id, name, position, share_token, ungrouped_position, created_at, updated_at')
+    .select('id, name, position, share_token, ungrouped_position, is_template, prep_prompt, created_at, updated_at')
     .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
@@ -37,7 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({ list, items: items || [], segments: segments || [] });
 }
 
-// PATCH — rename a shelf.
+// PATCH — rename a shelf or update its preparation settings.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getApprovedSession();
@@ -47,18 +48,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const body = await req.json().catch(() => ({}));
-  const patch: Record<string, unknown> = {};
+  const preparation = parsePreparationPatch(body);
+  if (preparation.error) return NextResponse.json({ error: preparation.error }, { status: 400 });
+  const patch: Record<string, unknown> = preparation.patch;
   if (typeof body.name === 'string') patch.name = body.name.slice(0, 80) || 'Shelf';
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
   patch.updated_at = new Date().toISOString();
 
   const sb = supabaseAdmin();
-  const { error } = await sb
+  const { data, error } = await sb
     .from('lists')
     .update(patch)
     .eq('id', id)
-    .eq('stream_id', session.streamId);
+    .eq('stream_id', session.streamId)
+    .select('id')
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   return NextResponse.json({ ok: true });
 }

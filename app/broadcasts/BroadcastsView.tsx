@@ -37,10 +37,12 @@ function RecordingSettings({ broadcast, streamId }: { broadcast: Broadcast; stre
 
 export function BroadcastsView({ streamId, canManage, displayName, broadcastId }: { streamId: string; canManage: boolean; displayName: string; broadcastId?: string }) {
   const client = useQueryClient();
+  const [search,setSearch]=useState('');
+  const [filters,setFilters]=useState({ q:'',state:'all',from:'',until:'' });
   const history = useInfiniteQuery({
-    queryKey: [...queryKeys.broadcasts(streamId), 'history'],
+    queryKey: [...queryKeys.broadcasts(streamId), 'history',filters],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => loadBroadcasts(pageParam),
+    queryFn: ({ pageParam }) => loadBroadcasts(pageParam,false,filters),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     refetchInterval: 30_000,
   });
@@ -60,7 +62,13 @@ export function BroadcastsView({ streamId, canManage, displayName, broadcastId }
       <div className="grid lg:grid-cols-[18rem_1fr] gap-8">
         <section aria-label="Show history" className={broadcastId ? "order-2 lg:order-1" : "order-1"}>
           {broadcastId ? <h2 className="font-display text-2xl font-bold mb-3">Show history</h2> : <h1 className="font-display text-2xl font-bold mb-3">Show history</h1>}
-          {history.isPending ? <p className="text-sm text-ink/60">Loading shows…</p> : history.isError ? <><p role="alert" className="text-rust text-sm">Could not load show history.</p><Button size="sm" variant="outline" onClick={() => history.refetch()}>Retry history</Button></> : shows.length === 0 ? <p className="text-sm text-ink/60">No shows recorded yet. Start a show to keep its rundown and covered stories together.</p> : <ul className="divide-y divide-ink/20 border-y border-ink/20">
+          <form className="space-y-2 mb-4" onSubmit={event=>{event.preventDefault();setFilters({...filters,q:search.trim()});}}>
+            <Input className="block w-full" aria-label="Search shows and stories" placeholder="Show title, covered story, or URL…" maxLength={200} value={search} onChange={event=>setSearch(event.target.value)}/>
+            <label className="block text-xs">Show status <select className="border border-ink/20 bg-transparent p-1" value={filters.state} onChange={event=>setFilters({...filters,state:event.target.value})}><option value="all">All shows</option><option value="ended">Ended</option><option value="active">Active</option></select></label>
+            <div className="flex flex-wrap gap-2 text-xs"><label>From (UTC)<Input className="block w-32" type="date" value={filters.from} onChange={event=>setFilters({...filters,from:event.target.value})}/></label><label>Through (UTC)<Input className="block w-32" type="date" value={filters.until} onChange={event=>setFilters({...filters,until:event.target.value})}/></label></div>
+            <Button size="sm" type="submit">Search shows</Button>
+          </form>
+          {history.isPending ? <p className="text-sm text-ink/60">Loading shows…</p> : history.isError ? <><p role="alert" className="text-rust text-sm">Could not load show history.</p><Button size="sm" variant="outline" onClick={() => history.refetch()}>Retry history</Button></> : shows.length === 0 ? <p className="text-sm text-ink/60">No shows match these filters. Start a show to begin recording history.</p> : <ul className="divide-y divide-ink/20 border-y border-ink/20">
             {shows.map((show) => <li key={show.id} className="py-3"><Link href={`/broadcasts/${show.id}`} aria-current={show.id === broadcastId ? 'page' : undefined} className="block hover:text-rust break-words"><span className="font-display font-bold">{show.title}</span><span className="block font-mono text-xs text-ink/60 mt-1">{new Date(show.started_at).toLocaleString()} · {show.note_count} covered{!show.ended_at && ' · Active'}</span></Link></li>)}
           </ul>}
           {history.hasNextPage && <Button size="sm" variant="outline" className="mt-3" disabled={history.isFetchingNextPage} onClick={() => history.fetchNextPage()}>Load older shows</Button>}

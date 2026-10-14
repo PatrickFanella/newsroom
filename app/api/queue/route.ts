@@ -168,7 +168,6 @@ export async function PATCH(req: NextRequest) {
       patch.approved_by_login = null;
       patch.approved_by_display_name = null;
     }
-    if (body.status === 'played') patch.played_at = new Date().toISOString();
   }
   if (typeof body.position === 'number') patch.position = body.position;
   if (typeof body.mod_notes === 'string') patch.mod_notes = body.mod_notes;
@@ -188,6 +187,11 @@ export async function PATCH(req: NextRequest) {
   if ('prep_note' in body) {
     const pn = typeof body.prep_note === 'string' ? body.prep_note.trim() : '';
     patch.prep_note = pn || null;
+  }
+  // The database snapshots this takeaway into show_notes atomically with
+  // the play transition. It also cancels that note when Played is undone.
+  if (body.status === 'played' && 'takeaway' in body) {
+    patch.prep_note = typeof body.takeaway === 'string' ? body.takeaway.trim() || null : null;
   }
   // Streamer's replacement for the title shown on the overlay and in the
   // "Watching:" chat post (the scraped title itself is left alone). Accepts
@@ -278,20 +282,6 @@ export async function PATCH(req: NextRequest) {
   // recover work left queued or interrupted by a function timeout.
   if (body.status === 'approved' && data) {
     waitUntil(processSubmissionEnrichment(id, session.streamId));
-  }
-
-  // If marked played, create a show_notes entry
-  if (body.status === 'played' && data) {
-    await sb.from('show_notes').insert({
-      stream_id: session.streamId,
-      submission_id: data.id,
-      played_at: data.played_at,
-      title: data.title,
-      url: data.url,
-      summary: data.summary,
-      archive_url: data.archive_url,
-      takeaway: body.takeaway || null,
-    });
   }
 
   broadcastQueueChange(session.streamId);

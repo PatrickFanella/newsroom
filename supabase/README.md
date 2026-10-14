@@ -71,3 +71,31 @@ Postgres version (`show server_version;` on the remote database) if it
 ever drifts from the default. Nothing here requires the local dev stack
 (`supabase start`, Docker) — the app talks to the hosted project directly,
 the CLI is only used for `migration`/`db push`/`link`.
+
+## Play-history and export migration
+
+Apply `20261014003000_play_history_exports.sql` before deploying the matching
+application code. It adds transactional play-note triggers, per-note export
+receipts, and a lease for Discord posts. It does not depend on the approval
+enrichment migration.
+
+Review the legacy history before rollout: duplicate linked notes and notes
+whose linked submission is no longer played are marked cancelled, with their
+contents retained. Detached notes from cleared submissions remain active.
+Existing Markdown and Discord timestamps seed their respective receipts.
+
+The application no longer inserts a separate note after a play update. The
+triggers must be installed for each successful play to include its note.
+Reverting only the application also restores the old timestamp-based export
+readers; exports made by that old code do not maintain the new note receipts.
+Reconcile those receipts before upgrading again rather than assuming an
+application rollback preserves the new export guarantees.
+
+For a test database with all migrations applied:
+
+```bash
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/play_history_exports.sql
+```
+
+The fixture transaction rolls back. Do not run it against the linked hosted
+project.

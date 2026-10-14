@@ -62,7 +62,11 @@ services:
         condition: service_healthy
     command: [node, deploy/scheduler.mjs]
     healthcheck:
-      disable: true
+      test: [CMD, node, -e, "process.exit(Date.now()-Number(require('fs').readFileSync('/tmp/newsroom-scheduler-health','utf8'))<90000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     environment:
       CLEANUP_URL: http://app:3000/api/cron/cleanup
       CRON_SECRET: ${CRON_SECRET:?Run npm run setup:self-host first}

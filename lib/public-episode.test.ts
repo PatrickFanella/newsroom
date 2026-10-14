@@ -1,0 +1,11 @@
+import {describe,expect,it}from 'vitest';
+import {episodeOptions,projectPublicEpisode,publicSourceUrl,readPublicProjection}from './public-episode';
+import type {BroadcastDetail}from './broadcast';
+const detail={broadcast:{id:'private-id',stream_id:'private-stream',title:'Show',started_at:'2026-10-10T00:00:00Z',ended_at:'2026-10-10T01:00:00Z',vod_url:'https://www.twitch.tv/videos/123',vod_offset_seconds:300,updated_at:'',rundown:{items:[{prep_note:'PRIVATE PREP'}],segments:[],ungrouped_position:0},public_token:'private-token'},notes:[{id:'private-note',title:'Story',url:'https://youtube.com/watch?v=abcdefghijk&list=private_playlist',played_at:'',timestamp_offset_s:600,summary:'Summary',takeaway:'My takeaway',archive_url:null,mod_notes:'PRIVATE MOD',review_claim_token:'PRIVATE CLAIM'}]} as unknown as BroadcastDetail;
+describe('public episode projection',()=>{
+ it('excludes all internal state and requires explicit text opt-ins',()=>{const projection=projectPublicEpisode(detail,episodeOptions({}));const text=JSON.stringify(projection);expect(text).not.toMatch(/PRIVATE|private-id|private-stream|private-note|private_playlist/);expect(projection.stories[0].summary).toBeNull();expect(projection.stories[0].takeaway).toBeNull();expect(projection.stories[0].chapter_seconds).toBe(900);});
+ it('includes only selected summaries/takeaways',()=>{const projection=projectPublicEpisode(detail,episodeOptions({title:' Public ',includeTakeaways:true}));expect(projection.title).toBe('Public');expect(projection.stories[0].takeaway).toBe('My takeaway');expect(projection.stories[0].summary).toBeNull();});
+ it.each(['javascript:alert(1)','data:text/html,hello','https://name:password@example.com/a',null])('refuses unsafe public links',value=>expect(publicSourceUrl(value)).toBeNull());
+ it('drops extra keys on public reads as well as publishing',()=>{const projection=projectPublicEpisode(detail,episodeOptions({}));const read=readPublicProjection({...projection,secret:'PRIVATE',stories:projection.stories.map(s=>({...s,prep_note:'PRIVATE'}))});expect(JSON.stringify(read)).not.toContain('PRIVATE');});
+ it.each([{includeTakeaways:'false'},{title:''},{title:'x'.repeat(161)},null,[]])('rejects invalid options',value=>expect(()=>episodeOptions(value)).toThrow());
+});

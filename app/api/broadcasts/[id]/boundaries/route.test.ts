@@ -1,6 +1,6 @@
 // @vitest-environment node
 import {beforeEach,describe,expect,it,vi}from 'vitest';import {NextRequest}from 'next/server';
-const mock=vi.hoisted(()=>({session:vi.fn(),rpc:vi.fn(),changed:vi.fn()}));vi.mock('@/lib/session',()=>({getApprovedSession:mock.session}));vi.mock('@/lib/supabase',()=>({supabaseAdmin:()=>({rpc:mock.rpc})}));vi.mock('@/lib/realtime',()=>({broadcastSessionChange:mock.changed}));vi.mock('@vercel/functions',()=>({waitUntil:vi.fn()}));
+const mock=vi.hoisted(()=>({session:vi.fn(),rpc:vi.fn(),changed:vi.fn()}));vi.mock('@/lib/session',()=>({getApprovedSession:mock.session}));vi.mock('@/lib/supabase',()=>({supabaseAdmin:()=>({rpc:mock.rpc})}));vi.mock('@/lib/realtime',()=>({broadcastSessionChange:mock.changed}));vi.mock('@/lib/background',()=>({waitUntil:vi.fn()}));
 import {PATCH}from './route';
 const id='11111111-1111-4111-8111-111111111111';const context={params:Promise.resolve({id})};const body={startedAt:'2026-10-14T00:00:00Z',endedAt:null,expectedUpdatedAt:'2026-10-14T01:00:00.123456Z'};
 const call=(value:unknown=body)=>PATCH(new NextRequest('http://localhost/api/broadcasts/show/boundaries',{method:'PATCH',body:JSON.stringify(value)}),context);

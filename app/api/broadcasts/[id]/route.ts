@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { waitUntil } from '@vercel/functions';
+import { waitUntil } from '@/lib/background';
 import { getApprovedSession, getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { broadcastChapterText, broadcastMarkdown, isBroadcastId, validateBroadcastPatch, type BroadcastDetail } from '@/lib/broadcast';

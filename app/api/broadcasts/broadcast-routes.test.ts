@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ session: vi.fn(), approved: vi.fn(), rpc: vi.f
 vi.mock('@/lib/session', () => ({ getSession: mocks.session, getApprovedSession: mocks.approved }));
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: () => ({ rpc: mocks.rpc, from: mocks.from }) }));
 vi.mock('@/lib/realtime', () => ({ broadcastSessionChange: mocks.changed }));
-vi.mock('@vercel/functions', () => ({ waitUntil: mocks.wait }));
+vi.mock('@/lib/background', () => ({ waitUntil: mocks.wait }));
 const id = '00000000-0000-4000-8000-000000000001';
 const context = { params: Promise.resolve({ id }) };
 const owner = { streamId: 'own-channel', role: 'streamer' };

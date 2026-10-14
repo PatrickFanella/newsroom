@@ -2,7 +2,7 @@
 import {beforeEach,describe,expect,it,vi}from 'vitest';import {NextRequest}from 'next/server';
 const mock=vi.hoisted(()=>({signature:vi.fn(),fresh:vi.fn(),rpc:vi.fn(),broadcast:vi.fn(),wait:vi.fn()}));
 vi.mock('@/lib/twitch-eventsub',()=>({verifySignature:mock.signature,isTimestampFresh:mock.fresh,resolveEventId:vi.fn(),classifyDedupOutcome:vi.fn()}));
-vi.mock('@/lib/supabase',()=>({supabaseAdmin:()=>({rpc:mock.rpc})}));vi.mock('@/lib/realtime',()=>({broadcastSessionChange:mock.broadcast}));vi.mock('@vercel/functions',()=>({waitUntil:mock.wait}));
+vi.mock('@/lib/supabase',()=>({supabaseAdmin:()=>({rpc:mock.rpc})}));vi.mock('@/lib/realtime',()=>({broadcastSessionChange:mock.broadcast}));vi.mock('@/lib/background',()=>({waitUntil:mock.wait}));
 vi.mock('@/lib/submit-url',()=>({submitUrlToQueue:vi.fn()}));vi.mock('@/lib/submit-question',()=>({matchQuestionCommand:vi.fn(),submitQuestionToQueue:vi.fn()}));vi.mock('@/lib/raffle',()=>({handleRaffleEntry:vi.fn()}));vi.mock('@/lib/announce',()=>({announceSubmission:vi.fn()}));vi.mock('@/lib/ratelimit',()=>({checkRateLimit:vi.fn(),hashKey:vi.fn()}));
 import {POST}from './route';
 const body={subscription:{type:'stream.online',condition:{broadcaster_user_id:'999'}},event:{id:'100',broadcaster_user_id:'999',started_at:'2026-10-14T00:00:00Z'}};

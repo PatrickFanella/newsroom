@@ -25,6 +25,8 @@ jobs:
         run: docker build --build-arg NEXT_PUBLIC_APP_URL=https://newsroom.example.invalid -t newsroom:self-hosted .
       - name: Verify isolated PostgreSQL deployment
         run: node scripts/smoke-self-host.mjs
+      - name: Verify guided installation and resume
+        run: node scripts/smoke-installer.mjs
 
   test:
     runs-on: ubuntu-latest

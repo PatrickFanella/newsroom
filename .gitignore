@@ -15,3 +15,10 @@ tsconfig.tsbuildinfo
 extension/*.zip
 
 .env.selfhost
+
+# Private guided installer files
+.newsroom-install.json
+.newsroom-install.lock
+.newsroom-installer.log
+compose.installer.yaml
+deploy/Caddyfile.installer

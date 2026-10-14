@@ -16,6 +16,8 @@ import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { RafflePanel } from '@/components/RafflePanel';
 import { EnrichmentStatus } from '@/components/EnrichmentStatus';
+
+import { BroadcastControls } from '@/components/BroadcastControls';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -392,6 +394,7 @@ export function DeckMobile({
         className="flex-1 px-4 pt-4"
         style={{ paddingBottom: CONTROLS_H + PEEK_H + 16 }}
       >
+        <BroadcastControls streamId={streamId} canManage={!curateOnly} />
         {!loaded ? (
           <p className="py-20 text-center font-mono text-xs text-ink/50">Loading the deck…</p>
         ) : !active ? (

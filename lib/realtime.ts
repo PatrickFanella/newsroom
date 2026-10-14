@@ -76,3 +76,8 @@ export function broadcastModStatusChange(streamId: string): Promise<void> {
 export function broadcastRaffleChange(streamId: string): Promise<void> {
   return broadcastChange(`raffle:${streamId}`, streamId);
 }
+
+/** Start/end and recording edits invalidate private broadcast views. */
+export function broadcastSessionChange(streamId: string): Promise<void> {
+  return broadcastChange(`broadcasts:${streamId}`, streamId);
+}

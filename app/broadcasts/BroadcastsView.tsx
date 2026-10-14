@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/AppHeader';
 import { BroadcastControls } from '@/components/BroadcastControls';
+import { BundleContext } from '@/components/StoryBundle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { loadBroadcast, loadBroadcasts, saveBroadcast } from '@/lib/broadcast-client';
@@ -108,13 +109,14 @@ export function BroadcastsView({ streamId, canManage, displayName, broadcastId }
                     <a className="underline" href={note.url} target="_blank" rel="noreferrer">Source ↗</a>
                     {note.archive_url && <a className="underline" href={note.archive_url} target="_blank" rel="noreferrer">Archived snapshot ↗</a>}
                   </div>
+                  {note.story_bundle_snapshot && <BundleContext bundle={note.story_bundle_snapshot} />}
                   {note.summary && <p className="text-sm whitespace-pre-line mt-2">{note.summary}</p>}
                   {note.takeaway && <blockquote className="text-sm text-ink/70 whitespace-pre-line mt-2">{note.takeaway}</blockquote>}
                 </li>;
               })}
             </ol>}
             <details className="border-t border-ink/20 mt-8 pt-4"><summary className="cursor-pointer font-display text-lg font-bold">Rundown saved at show start · {broadcast.rundown.items.length} items</summary>
-              <ul className="space-y-2 mt-3 text-sm">{savedRundownOrder(broadcast).map((item) => <li key={item.id}><a className="underline break-words" href={item.url} target="_blank" rel="noreferrer">{item.title || item.url}</a><span className="text-ink/50"> · {broadcast.rundown.segments.find((segment) => segment.id === item.segment_id)?.name || 'Ungrouped'}</span></li>)}</ul>
+              <ul className="space-y-2 mt-3 text-sm">{savedRundownOrder(broadcast).map((item) => <li key={item.id}><a className="underline break-words" href={item.url} target="_blank" rel="noreferrer">{item.title || item.url}</a><span className="text-ink/50"> · {broadcast.rundown.segments.find((segment) => segment.id === item.segment_id)?.name || 'Ungrouped'}</span>{item.story_bundle && <BundleContext bundle={item.story_bundle} />}</li>)}</ul>
               {broadcast.rundown.items.length === 0 && <p className="text-sm text-ink/60 mt-2">The deck was empty when this show started.</p>}
             </details>
           </> : null}

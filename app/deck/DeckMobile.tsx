@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
 import { EnrichmentEvidence } from '@/components/EnrichmentEvidence';
+import { LiveStoryBundle } from '@/components/StoryBundle';
 import { formatClock, formatDuration, kindTint } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -351,6 +352,7 @@ export function DeckMobile({
               )}
               {chatEnabled && <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>}
               <DropdownMenuItem asChild><Link href="/shelf">Shelf</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/bundles">Bundles</Link></DropdownMenuItem>
               {!curateOnly && (
                 <DropdownMenuItem asChild><Link href="/setup">Settings</Link></DropdownMenuItem>
               )}
@@ -471,6 +473,7 @@ export function DeckMobile({
             <EnrichmentStatus key={`${active.id}:${active.enrichment_state}`} id={active.id} state={active.enrichment_state} />
 
             <EnrichmentEvidence summary={active.summary} extraction_evidence={active.extraction_evidence} summary_evidence={active.summary_evidence} />
+            <LiveStoryBundle key={active.id} submissionId={active.id} bundleId={active.story_bundle_id} />
 
             <a
               href={active.url}

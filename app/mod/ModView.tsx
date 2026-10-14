@@ -31,6 +31,7 @@ import { CopyButton } from './CopyButton';
 import { ModActions } from './ModActions';
 import { ReviewClaimControls } from '@/components/ReviewClaimControls';
 import { activeReviewClaim } from '@/lib/review-coordination';
+import { StoryBundleLink } from '@/components/StoryBundle';
 
 const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
@@ -673,6 +674,7 @@ export function ModView({
                       ▶ played on air
                     </span>
                   )}
+                  {(s.story_bundle_id || (canCurate && ['pending','approved'].includes(s.status))) && <StoryBundleLink submissionId={s.id} bundleId={s.story_bundle_id} canManage={canCurate} />}
                   {canCurate && (
                     <SaveToListMenu
                       trigger={

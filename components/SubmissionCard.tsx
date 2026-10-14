@@ -18,6 +18,7 @@ type Submission = ReviewState & {
   id: string;
   extraction_evidence?: Evidence | null;
   summary_evidence?: Evidence | null;
+  story_bundle_id?: string | null;
   url: string;
   kind: string;
   status: string;

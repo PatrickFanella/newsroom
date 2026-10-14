@@ -158,6 +158,30 @@ factual claims or establish copyright clearance. Shelf copies do not yet carry
 this queue-item evidence.
 
 Apply `20261014040000_enrichment_evidence.sql` before deploying.
+## Story bundles
+
+Use **Bundle story** on a pending moderator card or an approved deck item to
+organize one lead story with shared prep notes and up to twelve supporting
+links. Supporting links have a role: coverage, primary document, or clip.
+You can add related-coverage suggestions after reviewing them, then edit
+or remove them before saving.
+
+Owners and moderators with curation permission can create and edit bundles.
+Other moderators can read them. **Approve lead onto deck** uses the existing
+approval flow and adds only the lead item; supporting links do not become
+separate queue items. Bundle sources are links, not fetched documents or
+verification claims. The existing deck takeaway remains separate from the
+bundle's shared preparation notes.
+
+The deck shows the bundle beside its lead. Each broadcast saves the bundle
+version at show start, and each play records its own version. Show history
+and per-show Markdown downloads include the saved prep notes and supporting links;
+chapter downloads use the saved bundle title. Later edits and clearing the
+lead preserve those historical versions. Retained bundles remain available
+at `/bundles`, although a cleared lead cannot be approved again from there.
+
+Apply `20261014050000_story_bundles.sql` after the broadcast-session migration.
+Old shows and notes are not backfilled with guessed bundle versions.
 
 ## Architectural choices &amp; trade-offs
 

@@ -1273,6 +1273,7 @@ export function DeckView({
             <Link href="/shelf" className="underline hover:text-rust">
               Shelf
             </Link>
+            <Link href="/bundles" className="underline hover:text-rust">Bundles</Link>
             {!curateOnly && (
               <DropdownMenu>
                 <DropdownMenuTrigger className="underline hover:text-rust">Export Notes</DropdownMenuTrigger>

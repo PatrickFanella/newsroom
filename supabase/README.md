@@ -181,3 +181,29 @@ extraction updates only extraction evidence; AI analysis writes its own input
 record alongside the generated fields, so late basic metadata cannot relabel
 a summary's inputs. Apply the migration before deploying extraction changes.
 Evidence records contain bounded metadata rather than fetched content.
+## Story bundles
+
+`20261014050000_story_bundles.sql` builds on broadcast sessions. It adds
+channel-owned bundles, one bundle per lead submission, revision-checked
+editing, and server-only RPCs. Sources are validated and bounded by the API;
+JSON snapshots contain title, prep notes, source roles/links, and lead metadata.
+The new migration extends `start_broadcast` without editing its original
+migration. Existing show snapshots remain unchanged.
+
+Bundle creation locks the lead row, so duplicate requests return the same
+bundle. Edits lock the bundle row and reject stale revisions. The API supplies
+the channel from the signed session and requires existing curation permission
+for mutations. Queue approval can include an expected status, checked before
+external work and again in the final conditional write.
+
+A submission trigger captures bundle context at the play write. The main
+queue route carries that returned snapshot into its later note insertion;
+the note trigger also supports atomic play-history inserts. This prevents
+intervening bundle edits from changing the play's recorded context. Clearing
+a lead sets its bundle reference to null while retaining lead metadata and
+show/note snapshots. Bundle history uses 50-item timestamp/UUID pages.
+
+Apply this migration after `20261014010000_broadcast_sessions.sql`. Run
+`psql -v ON_ERROR_STOP=1 -f supabase/tests/story_bundles.sql` in a disposable
+database to check isolation, idempotency, conflicts, snapshots, retention,
+pagination, and privileges. Its fixtures roll back.

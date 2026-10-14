@@ -47,7 +47,12 @@ export function useRealtimeChannel(topic: string | null, onChange: () => void) {
   useEffect(() => {
     if (!topic) return;
     const sb = getBrowserClient();
-    if (!sb) return;
+    if (!sb) {
+      // PostgreSQL-only hosting has no Supabase Realtime service. Refresh
+      // through the same authenticated endpoints at a bounded interval.
+      const timer = setInterval(() => cb.current(), 15_000);
+      return () => clearInterval(timer);
+    }
 
     const channel = sb
       .channel(topic)

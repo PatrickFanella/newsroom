@@ -1,4 +1,4 @@
-import {NextRequest,NextResponse}from 'next/server';import {waitUntil}from '@vercel/functions';
+import {NextRequest,NextResponse}from 'next/server';import {waitUntil}from '@/lib/background';
 import {getApprovedSession}from '@/lib/session';import {isBroadcastId}from '@/lib/broadcast';import {correctedBoundaries}from '@/lib/twitch-broadcast';import {supabaseAdmin}from '@/lib/supabase';import {broadcastSessionChange}from '@/lib/realtime';
 export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}) {
  const session=await getApprovedSession();if(!session)return NextResponse.json({error:'unauthenticated'},{status:401});if(session.role!=='streamer')return NextResponse.json({error:'forbidden'},{status:403});const {id}=await params;if(!isBroadcastId(id))return NextResponse.json({error:'not found'},{status:404});

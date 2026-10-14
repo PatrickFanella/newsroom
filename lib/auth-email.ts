@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { sendLocalMagicLink, verifyLocalMagicLink } from './local-auth';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from './supabase';
 
@@ -37,6 +38,7 @@ export function callbackUrl(): string {
 
 /** Asks Supabase to email a sign-in link. Creates the auth user on first use. */
 export async function sendMagicLink(email: string): Promise<{ ok: boolean; error?: string }> {
+  if (process.env.DATABASE_MODE === 'postgres') return sendLocalMagicLink(email);
   const { error } = await authClient().auth.signInWithOtp({
     email,
     options: { shouldCreateUser: true, emailRedirectTo: callbackUrl() },
@@ -48,6 +50,7 @@ export async function sendMagicLink(email: string): Promise<{ ok: boolean; error
 export async function verifyMagicLink(
   tokenHash: string,
 ): Promise<{ id: string; email: string } | null> {
+  if (process.env.DATABASE_MODE === 'postgres') return verifyLocalMagicLink(tokenHash);
   const { data, error } = await authClient().auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
   const user = data?.user;
   if (error || !user?.id || !user.email) return null;

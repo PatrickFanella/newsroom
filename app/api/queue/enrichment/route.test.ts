@@ -5,7 +5,7 @@ import { POST } from './route';
 const mocks = vi.hoisted(() => ({ session: vi.fn(), claim: vi.fn(), run: vi.fn(), waitUntil: vi.fn() }));
 vi.mock('@/lib/session', () => ({ getApprovedSession: mocks.session }));
 vi.mock('@/lib/submission-enrichment', () => ({ claimSubmissionEnrichment: mocks.claim, runSubmissionEnrichment: mocks.run }));
-vi.mock('@vercel/functions', () => ({ waitUntil: mocks.waitUntil }));
+vi.mock('@/lib/background', () => ({ waitUntil: mocks.waitUntil }));
 const id = '00000000-0000-4000-8000-000000000001';
 const request = (body: unknown) => new NextRequest('http://localhost/api/queue/enrichment', {
   method: 'POST', body: JSON.stringify(body),

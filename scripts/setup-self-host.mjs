@@ -1,0 +1,14 @@
+import { randomBytes, createHmac } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+const index = process.argv.indexOf('--url');
+if (index < 0) throw new Error('Usage: npm run setup:self-host -- --url https://newsroom.example.com');
+const origin = new URL(process.argv[index + 1]);
+if (origin.protocol !== 'https:' || origin.username || origin.password || origin.search || origin.hash || !['','/'].includes(origin.pathname)) throw new Error('Use a canonical HTTPS origin');
+const secret = () => randomBytes(32).toString('hex');
+const jwtSecret = secret();
+const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+const payload = encode({alg:'HS256',typ:'JWT'}) + '.' + encode({role:'service_role',iat:Math.floor(Date.now()/1000),exp:Math.floor(Date.now()/1000)+10*365*86400});
+const key = payload + '.' + createHmac('sha256',jwtSecret).update(payload).digest('base64url');
+const config = `# Private configuration. Preserve these secrets across upgrades.\nNEXT_PUBLIC_APP_URL=${origin.origin}\nDATABASE_MODE=postgres\nPOSTGRES_PASSWORD=${secret()}\nPOSTGREST_JWT_SECRET=${jwtSecret}\nPOSTGREST_SERVICE_ROLE_KEY=${key}\nNEWSROOM_SESSION_SECRET=${secret()}\nCRON_SECRET=${secret()}\nENCRYPTION_KEY=${secret()}\nNEWSROOM_PORT=3000\nAI_PROVIDER=anthropic\nANTHROPIC_API_KEY=\nOPENAI_BASE_URL=\nOPENAI_MODEL=\nOPENAI_API_KEY=\nNEXT_PUBLIC_TWITCH_CLIENT_ID=\nTWITCH_CLIENT_SECRET=\nEVENTSUB_SECRET=${secret()}\n# Optional email sign-in (SMTP STARTTLS by default)\nSMTP_HOST=\nSMTP_PORT=587\nSMTP_FROM=\nSMTP_USER=\nSMTP_PASSWORD=\n`;
+writeFileSync('.env.selfhost',config,{mode:0o600,flag:'wx'});
+console.log('Created private .env.selfhost. Configure SMTP or Twitch, then start Docker Compose. Existing configuration is never overwritten.');

@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({ session: vi.fn(), process: vi.fn(), waitUntil:
 vi.mock('@/lib/session', () => ({ getApprovedSession: mocks.session, getSession: mocks.session, sessionLogin: () => 'mod' }));
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: () => ({ from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock('@/lib/submission-enrichment', () => ({ processSubmissionEnrichment: mocks.process, recoverSubmissionEnrichment: vi.fn() }));
-vi.mock('@vercel/functions', () => ({ waitUntil: mocks.waitUntil }));
+vi.mock('@/lib/background', () => ({ waitUntil: mocks.waitUntil }));
 vi.mock('@/lib/realtime', () => ({ broadcastQueueChange: mocks.broadcast }));
 
 beforeEach(() => {

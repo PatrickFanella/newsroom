@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
-import { waitUntil } from '@vercel/functions';
+import { waitUntil } from '@/lib/background';
 import { recoverSubmissionEnrichment } from '@/lib/submission-enrichment';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +21,9 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get('authorization');
+  if (!secret && process.env.DATABASE_MODE === 'postgres') {
+    return NextResponse.json({ error: 'cron not configured' }, { status: 503 });
+  }
   if (secret && auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
@@ -29,6 +32,15 @@ export async function GET(req: NextRequest) {
   // Recovery can invoke paid providers; require the authenticated cron even
   // on installations that have not configured a secret for housekeeping.
   if (secret) waitUntil(recoverSubmissionEnrichment());
+  let localCleanupFailed = false;
+  if (process.env.DATABASE_MODE === 'postgres') {
+    const [tokens, limits] = await Promise.all([
+      sb.from('self_host_login_tokens').delete().lt('expires_at', new Date().toISOString()),
+      sb.from('self_host_rate_limits').delete().lt('started_at', new Date(Date.now() - 86400_000).toISOString()),
+    ]);
+    localCleanupFailed = !!(tokens.error || limits.error);
+    if (localCleanupFailed) console.error('cleanup: self-host auth cleanup failed');
+  }
   const now = Date.now();
 
   const eventsCutoff = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
@@ -59,7 +71,7 @@ export async function GET(req: NextRequest) {
   if (modStatusErr) console.error('cleanup: mod status reset failed:', modStatusErr.message);
 
   return NextResponse.json({
-    ok: !eventsErr && !rejectedErr && !modStatusErr,
+    ok: !localCleanupFailed && !eventsErr && !rejectedErr && !modStatusErr,
     processedEventsDeleted: eventsDeleted ?? 0,
     rejectedSubmissionsDeleted: rejectedDeleted ?? 0,
     modStatusesReset: modStatusesReset ?? 0,

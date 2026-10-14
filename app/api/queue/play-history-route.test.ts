@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({ session: vi.fn(), from: vi.fn(), rpc: vi.fn(),
 vi.mock('@/lib/session', () => ({ getApprovedSession: mocks.session, getSession: mocks.session, sessionLogin: () => 'streamer' }));
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: () => ({ from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock('@/lib/submission-enrichment', () => ({ processSubmissionEnrichment: vi.fn(), recoverSubmissionEnrichment: vi.fn() }));
-vi.mock('@vercel/functions', () => ({waitUntil: vi.fn()}));
+vi.mock('@/lib/background', () => ({waitUntil: vi.fn()}));
 vi.mock('@/lib/extract', () => ({ runAiEnrichment: mocks.enrich }));
 vi.mock('@/lib/realtime', () => ({ broadcastQueueChange: mocks.broadcast }));
 let patch: Record<string, unknown>;

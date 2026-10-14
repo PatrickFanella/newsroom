@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { broadcastQueueChange } from './realtime';
 
 const retained = vi.hoisted(() => vi.fn());
-vi.mock('@vercel/functions', () => ({ waitUntil: retained }));
+vi.mock('./background', () => ({ waitUntil: retained }));
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe('serverless Realtime delivery', () => {

@@ -2,7 +2,7 @@
 // Twitch POSTs chat messages here — no persistent connection needed.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { waitUntil } from '@vercel/functions';
+import { waitUntil } from '@/lib/background';
 import {
   verifySignature,
   isTimestampFresh,

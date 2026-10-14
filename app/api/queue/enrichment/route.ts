@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { waitUntil } from '@vercel/functions';
+import { waitUntil } from '@/lib/background';
 import { getApprovedSession } from '@/lib/session';
 import { claimSubmissionEnrichment, runSubmissionEnrichment } from '@/lib/submission-enrichment';
 

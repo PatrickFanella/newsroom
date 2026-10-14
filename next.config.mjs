@@ -19,6 +19,7 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: process.env.NEWSROOM_STANDALONE === '1' ? 'standalone' : undefined,
   // No remotePatterns: thumbnails come from arbitrary submitted/publisher
   // URLs (OG-scraped) and are always rendered as plain <img>, never through
   // next/image's <Image> component — so there's no legitimate use of the

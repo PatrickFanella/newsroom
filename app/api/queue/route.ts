@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession, sessionLogin } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
-import { waitUntil } from '@vercel/functions';
+import { waitUntil } from '@/lib/background';
 import { processSubmissionEnrichment, recoverSubmissionEnrichment } from '@/lib/submission-enrichment';
 import { normalizeTitleOverride } from '@/lib/title-override';
 import { submitUrlToQueue } from '@/lib/submit-url';

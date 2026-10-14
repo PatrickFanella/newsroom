@@ -2,7 +2,9 @@
 
 A deck for political &amp; news react streamers. Triage chat-submitted links, get DMCA risk signals, and turn your stream into show notes.
 
-Built with Next.js 16 (App Router), Supabase, configurable AI providers, and Twitch EventSub webhooks. Deploys entirely on Vercel — no separate worker needed.
+Built with Next.js 16 (App Router), configurable AI providers, and Twitch EventSub webhooks. Deploy on Vercel with Supabase, or self-host with PostgreSQL and Docker Compose.
+
+For a server deployment with PostgreSQL, local email sign-in, and no Supabase project, follow [Self-hosting](docs/SELF_HOSTING.md). The setup includes private database access, persistent storage, a cleanup scheduler, backup instructions, and an isolated deployment smoke test.
 
 ## What's in here
 

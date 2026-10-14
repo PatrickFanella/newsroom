@@ -13,3 +13,5 @@ tsconfig.tsbuildinfo
 
 # Regeneratable Chrome Web Store submission package (see extension/STORE_LISTING.md)
 extension/*.zip
+
+.env.selfhost

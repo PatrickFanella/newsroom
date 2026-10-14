@@ -7,7 +7,7 @@ vi.mock('@/lib/session',()=>({getSession:mocks.session,getApprovedSession:mocks.
 vi.mock('@/lib/curate',()=>({sessionCanCurate:mocks.curate}));
 vi.mock('@/lib/supabase',()=>({supabaseAdmin:()=>({rpc:mocks.rpc})}));
 vi.mock('@/lib/realtime',()=>({broadcastQueueChange:mocks.changed}));
-vi.mock('@vercel/functions',()=>({waitUntil:vi.fn()}));
+vi.mock('@/lib/background',()=>({waitUntil:vi.fn()}));
 const id='00000000-0000-4000-8000-000000000001';const context={params:Promise.resolve({id})};
 const request=(method='GET',body?:unknown,query='')=>new NextRequest('http://localhost/api/bundles'+query,{method,...(body?{body:JSON.stringify(body),headers:{'Content-Type':'application/json'}}:{})});
 beforeEach(()=>{vi.clearAllMocks();mocks.session.mockResolvedValue({streamId:'signed-channel',role:'mod'});mocks.curate.mockResolvedValue(true);mocks.rpc.mockResolvedValue({data:{bundle:{id}},error:null});});

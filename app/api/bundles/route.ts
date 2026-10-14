@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { waitUntil } from '@vercel/functions';
+import { waitUntil } from '@/lib/background';
 import { getSession, getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { supabaseAdmin } from '@/lib/supabase';

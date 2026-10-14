@@ -1,6 +1,7 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import crypto from 'crypto';
+import { supabaseAdmin } from './supabase';
 
 // Protects the token-authed, externally-facing endpoints (extension,
 // bookmarklet, OBS overlay) — a leaked or abused token would otherwise be
@@ -132,6 +133,20 @@ export async function checkRateLimit(
   kind: Kind,
   key: string,
 ): Promise<{ ok: true } | { ok: false; retryAfterSeconds: number }> {
+  if (process.env.DATABASE_MODE === 'postgres') {
+    const limits: Record<Kind, [number, number]> = {
+      write: [20, 60], read: [30, 60], poll: [10, 10], question: [1, 20],
+      raffle: [3, 20], 'auth-email': [3, 600], 'auth-ip': [15, 600],
+    };
+    const [limit, seconds] = limits[kind];
+    try {
+      const { data, error } = await supabaseAdmin().rpc('self_host_rate_limit', {
+        p_key: `${kind}:${hashKey(key)}`, p_limit: limit, p_seconds: seconds,
+      });
+      if (!error && typeof data?.ok === 'boolean') return data;
+    } catch { /* Rate-limit storage unavailable: fail closed. */ }
+    return { ok: false, retryAfterSeconds: 30 };
+  }
   const limiter = limiterFor(kind);
   if (!limiter) return { ok: true };
   const { success, reset } = await limiter.limit(key);

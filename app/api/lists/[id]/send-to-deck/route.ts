@@ -109,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (body.mode === 'segment') {
       const { data: listSeg } = await sb
         .from('list_segments')
-        .select('id, name')
+        .select('id, name, target_minutes')
         .eq('id', String(body.listSegmentId || ''))
         .eq('list_id', list.id)
         .maybeSingle();
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const { data: newSeg, error: segErr } = await sb
         .from('segments')
-        .insert({ stream_id: session.streamId, name: listSeg.name, position: nextSegPosition })
+        .insert({ stream_id: session.streamId, name: listSeg.name, target_minutes: listSeg.target_minutes, position: nextSegPosition })
         .select('id')
         .single();
       if (segErr || !newSeg) return NextResponse.json({ error: 'failed to create segment' }, { status: 500 });
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: listSegments } = await sb
       .from('list_segments')
-      .select('id, name, position')
+      .select('id, name, position, target_minutes')
       .eq('list_id', list.id)
       .order('position', { ascending: true })
       .order('created_at', { ascending: true });
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const { data: newSeg, error: segErr } = await sb
         .from('segments')
-        .insert({ stream_id: session.streamId, name: listSeg.name, position: nextSegPosition++ })
+        .insert({ stream_id: session.streamId, name: listSeg.name, target_minutes: listSeg.target_minutes, position: nextSegPosition++ })
         .select('id')
         .single();
       if (segErr || !newSeg) continue;

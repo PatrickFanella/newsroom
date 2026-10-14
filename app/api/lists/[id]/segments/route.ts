@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
+import { validTargetMinutes } from '@/lib/rundown-timing';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data, error } = await sb
     .from('list_segments')
     .insert({ list_id: list.id, name, position })
-    .select('id, name, position')
+    .select('id, name, position, target_minutes')
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -57,13 +58,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Expected an object' }, { status: 400 });
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
 
   const patch: Record<string, unknown> = {};
   if (typeof body.name === 'string') patch.name = body.name.slice(0, 80) || 'Segment';
   if (typeof body.position === 'number') patch.position = body.position;
+  if ('target_minutes' in body) {
+    if (!validTargetMinutes(body.target_minutes)) return NextResponse.json({ error: 'Target must be blank or 1–1440 whole minutes' }, { status: 400 });
+    patch.target_minutes = body.target_minutes;
+  }
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
 
   const sb = supabaseAdmin();
@@ -75,12 +81,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  const { error } = await sb
+  const { data, error } = await sb
     .from('list_segments')
     .update(patch)
     .eq('id', id)
-    .eq('list_id', list.id);
+    .eq('list_id', list.id)
+    .select('id')
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   return NextResponse.json({ ok: true });
 }

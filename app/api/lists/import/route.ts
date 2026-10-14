@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   // are independent from here on, so they must not share segment rows.
   const { data: sourceSegments } = await sb
     .from('list_segments')
-    .select('id, name, position')
+    .select('id, name, position, target_minutes')
     .eq('list_id', source.id)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
   for (const seg of sourceSegments ?? []) {
     const { data: copy } = await sb
       .from('list_segments')
-      .insert({ list_id: newList.id, name: seg.name, position: seg.position })
+      .insert({ list_id: newList.id, name: seg.name, position: seg.position, target_minutes: seg.target_minutes })
       .select('id')
       .single();
     if (copy) segmentIdMap.set(seg.id, copy.id);

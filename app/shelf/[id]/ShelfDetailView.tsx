@@ -34,9 +34,11 @@ import {
 import { SendToDeckMenu, type DeckSegment } from './SendToDeckMenu';
 import { type ShelfItem } from './SortableItemRow';
 import { ShelfSegmentBlock } from './ShelfSegmentBlock';
+import { SegmentTiming } from './SegmentTiming';
+import { rundownTiming } from '@/lib/rundown-timing';
 import { PreparationTemplateControls } from './PreparationTemplateControls';
 
-type ShelfSegment = { id: string; name: string; position: number };
+type ShelfSegment = { id: string; name: string; position: number; target_minutes?: number | null };
 type ShelfMeta = { id: string; name: string; share_token: string | null; ungrouped_position: number; is_template?: boolean; prep_prompt?: string };
 type ShelfData = { list: ShelfMeta; items: ShelfItem[]; segments: ShelfSegment[] };
 
@@ -613,6 +615,7 @@ export function ShelfDetailView({
           }}
         />}
 
+        {segments.length > 0 && <p className="text-sm text-ink/60 mb-4">Planned segment time: {rundownTiming(segments).minutes} min · {rundownTiming(segments).timed} of {segments.length} segments timed. Ungrouped items are outside this total.</p>}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
           <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
             {items.length} item{items.length === 1 ? '' : 's'}
@@ -726,6 +729,11 @@ export function ShelfDetailView({
                     key={seg.id}
                     containerId={seg.id}
                     title={editingSegment?.id === seg.id ? editingSegment.name : seg.name}
+                    timing={<SegmentTiming name={seg.name} minutes={seg.target_minutes ?? null} canCurate={canCurate} onSave={async (minutes) => {
+                      const response = await fetch(`/api/lists/${shelfId}/segments`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: seg.id, target_minutes: minutes }) });
+                      if (!response.ok) throw new Error('Timing save failed');
+                      await queryClient.invalidateQueries({ queryKey: shelfKey });
+                    }} />}
                     editable
                     items={blockItems}
                     canCurate={canCurate}

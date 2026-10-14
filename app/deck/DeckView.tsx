@@ -1547,6 +1547,7 @@ export function DeckView({
                       key={seg.id}
                       containerId={seg.id}
                       title={editingSegment?.id === seg.id ? editingSegment.name : seg.name}
+                      targetMinutes={seg.target_minutes}
                       editable
                       collapsed={seg.collapsed}
                       items={items}

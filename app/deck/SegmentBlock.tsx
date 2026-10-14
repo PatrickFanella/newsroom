@@ -14,11 +14,12 @@ import { SimpleTooltip } from '@/components/ui/tooltip';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableQueueItem } from './SortableQueueItem';
 
-export type Segment = { id: string; name: string; position: number; collapsed: boolean };
+export type Segment = { id: string; name: string; position: number; collapsed: boolean; target_minutes?: number | null };
 
 export function SegmentBlock({
   containerId,
   title,
+  targetMinutes,
   editable,
   collapsed,
   items,
@@ -39,6 +40,7 @@ export function SegmentBlock({
 }: {
   containerId: string; // 'ungrouped' or a segment id — the drop target id
   title: string | null; // null → no header (render items flat)
+  targetMinutes?: number | null;
   editable: boolean;
   collapsed: boolean;
   items: Submission[];
@@ -131,6 +133,7 @@ export function SegmentBlock({
           <span className="mr-auto shrink-0 font-mono text-xs font-semibold text-ink/60">
             ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
           </span>
+          {targetMinutes != null && <span className="font-mono text-[10px] text-ink/60">target {targetMinutes} min</span>}
           {onClearItems && items.length > 0 && (
             <SimpleTooltip content="Reject all items here (clears the block)">
               <button

@@ -21,12 +21,11 @@ npx supabase link --project-ref <ref>
 # Mark the baseline as already applied, without running it.
 npx supabase migration repair --status applied 20260909182636
 
-# Now push the migrations that come after it — right now, just the one
-# adding queue_overview() (see app/api/queue/route.ts for why).
+# Review migration history, then push the migrations that come after it.
 npx supabase db push
 ```
 
-After that, `supabase migration list` should show both migrations as
+After that, `supabase migration list` should show the reviewed migrations as
 applied on both local history and the remote project, and you're on the
 normal workflow below.
 
@@ -186,11 +185,11 @@ Bundle creation locks the lead row, so duplicate requests return the same
 bundle. Edits lock the bundle row and reject stale revisions. The API supplies
 the channel from the signed session and requires existing curation permission
 for mutations. Queue approval can include an expected status, checked before
-external work and again in the final conditional write.
+external work and again inside the final locked review transaction.
 
-A submission trigger captures bundle context at the play write. The main
-queue route carries that returned snapshot into its later note insertion;
-the note trigger also supports atomic play-history inserts. This prevents
+A submission trigger captures bundle context at the play write. The atomic
+play-history trigger inserts the note in that same transaction, and the note
+trigger stamps the captured bundle version. This prevents
 intervening bundle edits from changing the play's recorded context. Clearing
 a lead sets its bundle reference to null while retaining lead metadata and
 show/note snapshots. Bundle history uses 50-item timestamp/UUID pages.
@@ -208,3 +207,17 @@ extraction updates only extraction evidence; AI analysis writes its own input
 record alongside the generated fields, so late basic metadata cannot relabel
 a summary's inputs. Apply the migration before deploying extraction changes.
 Evidence records contain bounded metadata rather than fetched content.
+
+## Applying the combined application
+
+Apply pending migrations in timestamp order before deploying the matching
+application. Review coordination includes the six-argument review RPC, actor
+attribution, and play-trigger ordering. Story bundles preserve preparation
+and timing at show start. Usage admission keeps allowance-blocked enrichment
+skipped until a manual retry. These contracts are composed in their owning
+migrations, rather than repaired by a later integration migration.
+
+The database CI job applies every migration to an empty PostgreSQL 17 fixture
+and runs all SQL contracts. The self-host smoke test also checks repeated
+migration application, checksum mismatch rejection, and backup restoration.
+The tests use disposable databases; never point fixtures at a live deployment.

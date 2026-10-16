@@ -10,6 +10,7 @@ import { TriggerWarningBanner } from './TriggerWarning';
 
 type Submission = {
   id: string;
+  story_bundle_id?: string | null;
   url: string;
   kind: string;
   status: string;

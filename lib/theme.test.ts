@@ -391,10 +391,10 @@ describe('sanitizeFontFamily', () => {
 
 describe('googleFontsHref', () => {
   it('builds one request for the whole set, deduped and order-independent', () => {
-    const a = googleFontsHref(['Inter', 'Fraunces', 'Inter']);
-    const b = googleFontsHref(['Fraunces', 'Inter']);
+    const a = googleFontsHref(['Inter', 'Playfair Display', 'Inter']);
+    const b = googleFontsHref(['Playfair Display', 'Inter']);
     expect(a).toBe(b);
-    expect(a).toContain('family=Fraunces');
+    expect(a).toContain('family=Playfair+Display');
     expect(a).toContain('family=Inter');
     expect(a!.startsWith('https://fonts.googleapis.com/css2?')).toBe(true);
   });
@@ -413,7 +413,7 @@ describe('googleFontsHref', () => {
   // it doesn't host at all, not just one with an unsupported weight — and a
   // combined request means that ONE bad family can take the whole request
   // down, including every real Google font asked for alongside it.
-  describe('self-hosted fonts (OpenDyslexic)', () => {
+  describe('fonts served outside the Google loader', () => {
     it('never appears in the built URL on its own', () => {
       expect(googleFontsHref(['OpenDyslexic'])).toBeNull();
     });
@@ -423,7 +423,7 @@ describe('googleFontsHref', () => {
       const withoutIt = googleFontsHref(['Inter', 'Fraunces']);
       expect(withIt).toBe(withoutIt);
       expect(withIt).toContain('family=Inter');
-      expect(withIt).toContain('family=Fraunces');
+      expect(withIt).not.toContain('family=Fraunces');
       expect(withIt).not.toContain('OpenDyslexic');
     });
 

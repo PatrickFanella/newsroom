@@ -376,13 +376,12 @@ export const DEFAULT_FONTS: Record<FontRole, string> = {
   mono: 'JetBrains Mono',
 };
 
-/** Not on Google Fonts, so it can't go through the runtime-fetch path every
- *  other choice here does — see the @font-face block in app/globals.css,
- *  where it's self-hosted and always available instead. googleFontsHref
- *  below excludes anything in this list for exactly that reason: Google
- *  400s a css2 request that names a family it doesn't host, which would
- *  otherwise take down every OTHER font requested in the same call. */
-export const SELF_HOSTED_FONTS: readonly string[] = ['OpenDyslexic'];
+/** Families declared in globals.css rather than the runtime Google loader.
+ *  Fraunces uses local static files for consistent display glyphs; fetching
+ *  another copy could replace those faces. OpenDyslexic uses its pinned CDN
+ *  files because Google Fonts does not host it. Excluding it also prevents
+ *  Google from rejecting a combined request for other selected families. */
+export const SELF_HOSTED_FONTS: readonly string[] = ['OpenDyslexic', 'Fraunces'];
 
 /** Curated pairings that suit the broadsheet look. Not a hard limit — the
  *  settings UI also takes a free-text Google family name — but these are the

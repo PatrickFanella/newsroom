@@ -85,7 +85,9 @@ test('local HTTP lifecycle protects controls, verifies consent, serializes renew
   t.after(async () => { await new Promise(resolve => app.server.close(resolve)); await fs.rm(directory, { recursive: true, force: true }); });
   const origin = app.origin;
   const get = p => fetch(origin + p, { redirect: 'manual' });
-  const html = await (await get('/')).text();
+  const page = await get('/');
+  assert.equal(page.headers.get('referrer-policy'), 'same-origin');
+  const html = await page.text();
   const csrf = /name="csrf" value="([^"]+)"/.exec(html)[1];
   const post = (p, data, requestOrigin = origin) => fetch(origin + p, { method: 'POST', redirect: 'manual', headers: { Origin: requestOrigin }, body: new URLSearchParams({ csrf, ...data }) });
   assert.equal((await post('/connect', {}, 'https://untrusted.invalid')).status, 403);

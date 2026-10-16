@@ -122,10 +122,13 @@ begin
   select jsonb_build_object(
     'ungrouped_position', coalesce(channel.ungrouped_position, 0),
     'segments', (select coalesce(jsonb_agg(jsonb_build_object(
-      'id', id, 'name', name, 'position', position
+      'id', id, 'name', name, 'position', position, 'target_minutes', target_minutes
     ) order by position, id), '[]'::jsonb) from public.segments where stream_id = p_stream_id),
     'items', (select coalesce(jsonb_agg(jsonb_build_object(
       'id', id, 'title', title, 'url', url, 'kind', kind,
+      'normalized_url', normalized_url, 'title_override', title_override,
+      'publisher', publisher, 'thumbnail_url', thumbnail_url, 'summary', summary,
+      'prep_note', prep_note, 'mod_notes', mod_notes, 'trigger_warning', trigger_warning,
       'segment_id', segment_id, 'position', position, 'created_at', created_at,
       'story_bundle', public.bundle_snapshot(p_stream_id, story_bundle_id)
     ) order by position nulls last, created_at, id), '[]'::jsonb)

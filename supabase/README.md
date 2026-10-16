@@ -154,7 +154,7 @@ metadata changes, legacy requests, and RPC privileges.
 
 ## Broadcast sessions
 
-`20261014010000_broadcast_sessions.sql` adds show sessions and stamps newly
+`20261016040000_broadcast_sessions.sql` adds show sessions and stamps newly
 inserted show notes with the session covering their play time. Starting and
 ending a show lock the channel row; a partial unique index also prevents
 concurrent active shows for one channel. End retries retain the original end
@@ -175,7 +175,7 @@ and optional play-history compatibility.
 
 ## Story bundles
 
-`20261014050000_story_bundles.sql` builds on broadcast sessions. It adds
+`20261016040100_story_bundles.sql` builds on broadcast sessions. It adds
 channel-owned bundles, one bundle per lead submission, revision-checked
 editing, and server-only RPCs. Sources are validated and bounded by the API;
 JSON snapshots contain title, prep notes, source roles/links, and lead metadata.
@@ -195,7 +195,7 @@ intervening bundle edits from changing the play's recorded context. Clearing
 a lead sets its bundle reference to null while retaining lead metadata and
 show/note snapshots. Bundle history uses 50-item timestamp/UUID pages.
 
-Apply this migration after `20261014010000_broadcast_sessions.sql`. Run
+Apply this migration after `20261016040000_broadcast_sessions.sql`. Run
 `psql -v ON_ERROR_STOP=1 -f supabase/tests/story_bundles.sql` in a disposable
 database to check isolation, idempotency, conflicts, snapshots, retention,
 pagination, and privileges. Its fixtures roll back.

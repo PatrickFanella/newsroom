@@ -166,7 +166,7 @@ chapter downloads use the saved bundle title. Later edits and clearing the
 lead preserve those historical versions. Retained bundles remain available
 at `/bundles`, although a cleared lead cannot be approved again from there.
 
-Apply `20261014050000_story_bundles.sql` after the broadcast-session migration.
+Apply `20261016040100_story_bundles.sql` after the broadcast-session migration.
 Old shows and notes are not backfilled with guessed bundle versions.
 
 ## Architectural choices &amp; trade-offs
@@ -270,7 +270,7 @@ advance the existing channel-wide Markdown or Discord export boundaries.
 Chapter files are editable timestamp lists; publishing them to a platform is
 a separate step. Show boundaries and recording URLs are entered manually.
 
-Apply `20261014010000_broadcast_sessions.sql` before running this feature.
+Apply `20261016040000_broadcast_sessions.sql` before running this feature.
 Existing notes stay in channel-wide history because their show boundaries
 cannot be reconstructed reliably. Clearing the deck preserves new show
 notes and saved rundowns.

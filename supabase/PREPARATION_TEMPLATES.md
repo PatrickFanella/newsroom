@@ -10,7 +10,7 @@ Stream owners and moderators with curator permission can change preparation sett
 
 ## Migration and verification
 
-Apply `20261014060000_preparation_templates.sql` before deploying this app revision. It adds two fields to `lists` and a service-role-only copy function. Existing shelves default to ordinary shelves with empty prompts. The API uses the session's stream ID and checks curator permission before calling the function; the function independently requires an owned template. It captures the source shelf and its children in one database snapshot and inserts the copy in one transaction. An insertion failure rolls back the copy.
+Apply `20261016030000_preparation_templates.sql` before deploying this app revision. It adds two fields to `lists` and a service-role-only copy function. Existing shelves default to ordinary shelves with empty prompts. The API uses the session's stream ID and checks curator permission before calling the function; the function independently requires an owned template. It captures the source shelf and its children in one database snapshot and inserts the copy in one transaction. An insertion failure rolls back the copy.
 
 Run `npm test` with Node 24.18.0 for validation and UI tests. In a disposable database with the migrations and Supabase roles installed, run:
 

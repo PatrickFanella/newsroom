@@ -1,0 +1,8 @@
+{
+  "number": "01",
+  "branch": "upstream/reliable-approval-playback",
+  "sha": "30f34dd0ce4331ce38037e58a42cc130997d72c4",
+  "test_files": 40,
+  "tests": 496,
+  "validation_source": "Previously completed checks for submitted PR #3; not rerun during series preparation."
+}

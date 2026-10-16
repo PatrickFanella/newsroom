@@ -1,0 +1,10 @@
+{
+  "reference": "origin/main 1becfe54ac7d0581707a5e5ad9d1f2a1d9195f23",
+  "prepared_database": "series_09",
+  "result": "Equivalent schema definitions after ignoring physical column order and pg_dump session guards",
+  "column_order_differences": [
+    "submissions: bundle columns precede enrichment evidence",
+    "streams: broadcast automation columns precede budget columns"
+  ],
+  "functions_constraints_indexes_policies_grants": "identical"
+}

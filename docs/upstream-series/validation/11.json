@@ -1,0 +1,81 @@
+{
+  "number": "11",
+  "branch": "upstream/chatgpt-subscription",
+  "sha": "384b00ec31d6a968c2c3bbf101c5d84aa0a65e5b",
+  "checks": {
+    "install": {
+      "exit": 0,
+      "seconds": 4.4
+    },
+    "tests": {
+      "exit": 0,
+      "seconds": 8.5
+    },
+    "lint": {
+      "exit": 0,
+      "seconds": 6.4
+    },
+    "build": {
+      "exit": 0,
+      "seconds": 5.5
+    },
+    "migrations": {
+      "exit": 0,
+      "seconds": 1.5
+    },
+    "database-contracts": {
+      "exit": 0,
+      "seconds": 0.1
+    },
+    "chatgpt": {
+      "exit": 0,
+      "seconds": 0.5
+    }
+  },
+  "test_files": 90,
+  "tests": 871,
+  "migrations": [
+    "20260909182636_baseline.sql",
+    "20260909182637_add_queue_overview.sql",
+    "20260912052136_add_submission_approver.sql",
+    "20260921154644_add_submission_title_override.sql",
+    "20261007120000_account_identity.sql",
+    "20261013200000_submission_enrichment.sql",
+    "20261014003000_play_history_exports.sql",
+    "20261016020000_queue_search.sql",
+    "20261016020100_review_coordination.sql",
+    "20261016020200_moderator_action_history.sql",
+    "20261016030000_preparation_templates.sql",
+    "20261016030100_template_timing_targets.sql",
+    "20261016040000_broadcast_sessions.sql",
+    "20261016040100_story_bundles.sql",
+    "20261016040200_broadcast_history_search.sql",
+    "20261016050000_broadcast_discord_exports.sql",
+    "20261016050100_carry_unused_stories.sql",
+    "20261016050200_public_episode_pages.sql",
+    "20261016060000_automatic_twitch_broadcasts.sql",
+    "20261016070000_enrichment_evidence.sql",
+    "20261016070100_owner_usage_budgets.sql",
+    "20261016090000_self_host_auth.sql"
+  ],
+  "contracts": [
+    "automatic_twitch_broadcasts.sql",
+    "broadcast_discord_exports.sql",
+    "broadcast_history_search.sql",
+    "broadcast_sessions.sql",
+    "carry_unused_stories.sql",
+    "feature_integration.sql",
+    "moderator_action_history.sql",
+    "owner_usage_budgets.sql",
+    "play_history_exports.sql",
+    "preparation_templates.sql",
+    "prepared_broadcasts.sql",
+    "public_episode_pages.sql",
+    "queue_search.sql",
+    "review_coordination.sql",
+    "self_host_auth.sql",
+    "story_bundles.sql",
+    "submission_enrichment.sql",
+    "template_timing_targets.sql"
+  ]
+}

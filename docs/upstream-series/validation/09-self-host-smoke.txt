@@ -1,0 +1,7 @@
+
+> newsroom@0.1.0 test:self-host
+> node scripts/smoke-self-host.mjs
+
+Fresh bootstrap, repeat migrations, and all SQL contracts passed.
+SMTP sign-in, replay rejection, session, queue, play notes, background work, and scheduler passed.
+Restart persistence, backup restoration, and database readiness passed.

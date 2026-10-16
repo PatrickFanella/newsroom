@@ -1,0 +1,52 @@
+{
+  "number": "02",
+  "branch": "upstream/moderation-coordination",
+  "sha": "91d02f1deaefa9af91c2366088a5fffa76c5567d",
+  "checks": {
+    "install": {
+      "exit": 0,
+      "seconds": 4.6
+    },
+    "tests": {
+      "exit": 0,
+      "seconds": 7.2
+    },
+    "lint": {
+      "exit": 0,
+      "seconds": 4.9
+    },
+    "build": {
+      "exit": 0,
+      "seconds": 9.4
+    },
+    "migrations": {
+      "exit": 0,
+      "seconds": 0.8
+    },
+    "database-contracts": {
+      "exit": 0,
+      "seconds": 0.1
+    }
+  },
+  "test_files": 47,
+  "tests": 574,
+  "migrations": [
+    "20260909182636_baseline.sql",
+    "20260909182637_add_queue_overview.sql",
+    "20260912052136_add_submission_approver.sql",
+    "20260921154644_add_submission_title_override.sql",
+    "20261007120000_account_identity.sql",
+    "20261013200000_submission_enrichment.sql",
+    "20261014003000_play_history_exports.sql",
+    "20261016020000_queue_search.sql",
+    "20261016020100_review_coordination.sql",
+    "20261016020200_moderator_action_history.sql"
+  ],
+  "contracts": [
+    "moderator_action_history.sql",
+    "play_history_exports.sql",
+    "queue_search.sql",
+    "review_coordination.sql",
+    "submission_enrichment.sql"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "number": "04",
+  "branch": "upstream/broadcast-history",
+  "sha": "a2e36dd32735005389fd41d17f3ddc772a38740d",
+  "checks": {
+    "install": {
+      "exit": 0,
+      "seconds": 5.3
+    },
+    "tests": {
+      "exit": 0,
+      "seconds": 7.9
+    },
+    "lint": {
+      "exit": 0,
+      "seconds": 5.2
+    },
+    "build": {
+      "exit": 0,
+      "seconds": 9.5
+    },
+    "migrations": {
+      "exit": 0,
+      "seconds": 1.2
+    },
+    "database-contracts": {
+      "exit": 0,
+      "seconds": 0.1
+    }
+  },
+  "test_files": 62,
+  "tests": 708,
+  "migrations": [
+    "20260909182636_baseline.sql",
+    "20260909182637_add_queue_overview.sql",
+    "20260912052136_add_submission_approver.sql",
+    "20260921154644_add_submission_title_override.sql",
+    "20261007120000_account_identity.sql",
+    "20261013200000_submission_enrichment.sql",
+    "20261014003000_play_history_exports.sql",
+    "20261016020000_queue_search.sql",
+    "20261016020100_review_coordination.sql",
+    "20261016020200_moderator_action_history.sql",
+    "20261016030000_preparation_templates.sql",
+    "20261016030100_template_timing_targets.sql",
+    "20261016040000_broadcast_sessions.sql",
+    "20261016040100_story_bundles.sql",
+    "20261016040200_broadcast_history_search.sql"
+  ],
+  "contracts": [
+    "broadcast_history_search.sql",
+    "broadcast_sessions.sql",
+    "moderator_action_history.sql",
+    "play_history_exports.sql",
+    "preparation_templates.sql",
+    "prepared_broadcasts.sql",
+    "queue_search.sql",
+    "review_coordination.sql",
+    "story_bundles.sql",
+    "submission_enrichment.sql",
+    "template_timing_targets.sql"
+  ]
+}

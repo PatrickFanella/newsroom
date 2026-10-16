@@ -1,0 +1,17 @@
+{
+  "reference_head": "86bba26763353b6d4492bfa1f64cfaee041089e6",
+  "prepared_head": "2da019a1131d517f62d9d395606d29fd38dd1cf8",
+  "application_components_and_font_assets": "byte-identical",
+  "configuration_and_dependencies": "byte-identical",
+  "other_source_differences": {
+    "lib/usage-policy.ts": "trailing blank line removed",
+    "scripts/smoke-installer.mjs": "migration count follows actual file inventory instead of a literal 23"
+  },
+  "other_tree_differences": [
+    "CI retains the already published first chunk workflow and adds feature-specific checks at their owning chunks",
+    "Documentation uses ordered migration names and reflects composed contracts",
+    "Fork-only FEATURE_DELIVERY tracking table is omitted",
+    "Unsubmitted migration files are ordered by chunk; integration fixes folded into owning migrations",
+    "SQL contracts add prepared-broadcast coverage and exercise previously skipped play/review checks"
+  ]
+}

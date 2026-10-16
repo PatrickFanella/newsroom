@@ -1,0 +1,5 @@
+
+> newsroom@0.1.0 test:installer
+> node scripts/smoke-installer.mjs
+
+Guided install and resume passed: image build, migrations, app readiness, private files, credential escaping, public HTTPS distinction, and managed-proxy configuration.

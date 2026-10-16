@@ -13,6 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  self-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+      - name: Build standalone image
+        run: docker build --build-arg NEXT_PUBLIC_APP_URL=https://newsroom.example.invalid -t newsroom:self-hosted .
+      - name: Verify isolated PostgreSQL deployment
+        run: node scripts/smoke-self-host.mjs
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

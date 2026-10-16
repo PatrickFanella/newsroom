@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: newsroom
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run setup:self-host first}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/migrations:ro
+      - ./deploy/postgres:/deploy:ro
+      - ./deploy/postgres/init.sh:/docker-entrypoint-initdb.d/00-newsroom.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U postgres -d newsroom"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  database-api:
+    image: postgrest/postgrest:v13.0.4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/newsroom
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_SCHEMAS: public
+      PGRST_JWT_SECRET: ${POSTGREST_JWT_SECRET:?Run npm run setup:self-host first}
+      PGRST_DB_MAX_ROWS: 1000
+
+  app:
+    image: ${NEWSROOM_IMAGE:-newsroom:self-hosted}
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?Set the canonical HTTPS origin}
+        NEXT_PUBLIC_TWITCH_CLIENT_ID: ${NEXT_PUBLIC_TWITCH_CLIENT_ID:-}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    depends_on:
+      database-api:
+        condition: service_started
+    env_file: ${NEWSROOM_ENV_FILE:-.env.selfhost}
+    environment:
+      DATABASE_MODE: postgres
+      POSTGREST_URL: http://database-api:3000
+      NEXT_PUBLIC_SUPABASE_URL: ""
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+    ports:
+      - "127.0.0.1:${NEWSROOM_PORT:-3000}:3000"
+
+  scheduler:
+    image: ${NEWSROOM_IMAGE:-newsroom:self-hosted}
+    restart: unless-stopped
+    init: true
+    depends_on:
+      app:
+        condition: service_healthy
+    command: [node, deploy/scheduler.mjs]
+    healthcheck:
+      test: [CMD, node, -e, "process.exit(Date.now()-Number(require('fs').readFileSync('/tmp/newsroom-scheduler-health','utf8'))<90000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    environment:
+      CLEANUP_URL: http://app:3000/api/cron/cleanup
+      CRON_SECRET: ${CRON_SECRET:?Run npm run setup:self-host first}
+
+volumes:
+  postgres-data:

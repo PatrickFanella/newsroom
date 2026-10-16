@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const fail = (req: NextRequest, error: string) =>
   new NextResponse(null, {
     status: 302,
-    headers: { Location: new URL(`/login?error=${error}`, req.url).toString() },
+    headers: { Location: new URL(`/login?error=${error}`, process.env.NEXT_PUBLIC_APP_URL || req.url).toString() },
   });
 
 export async function GET(req: NextRequest) {
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     });
     const response = new NextResponse(null, {
       status: 302,
-      headers: { Location: new URL('/deck', req.url).toString() },
+      headers: { Location: new URL('/deck', process.env.NEXT_PUBLIC_APP_URL || req.url).toString() },
     });
     response.cookies.set(session.name, session.value, session.options);
     return response;

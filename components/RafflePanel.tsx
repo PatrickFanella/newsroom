@@ -9,7 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { RailTab } from '@/components/DeckRail';
 import { queryKeys } from '@/lib/query-keys';
 import { useRaffleRealtime } from '@/lib/use-raffle-realtime';
-import { DEFAULT_RAFFLE_COMMAND, MAX_WINNER_COUNT, type RaffleStatus } from '@/lib/raffle';
+import { DEFAULT_RAFFLE_COMMAND, MAX_WINNER_COUNT, type RaffleStatus } from '@/lib/raffle-shared';
 
 type RaffleData = {
   id: string;

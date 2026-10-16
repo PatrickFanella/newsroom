@@ -3,10 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 // Server-only client using the service role.
 // Never import this in a client component.
 export function supabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const postgres = process.env.DATABASE_MODE === 'postgres';
+  const url = postgres ? process.env.POSTGREST_URL : process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = postgres ? process.env.POSTGREST_SERVICE_ROLE_KEY : process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error('Missing Supabase env vars');
+    throw new Error('Missing database configuration');
   }
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -22,7 +23,10 @@ export function supabaseAdmin() {
       // the same first-ever snapshot forever, no matter what changes in the
       // database — the bug behind the overlay showing stale now-playing
       // data while other routes reading the same table stayed fresh.
-      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+      fetch: (input, init) => {
+        const target = postgres ? String(input).replace('/rest/v1/', '/') : input;
+        return fetch(target, { ...init, cache: 'no-store' });
+      },
     },
   });
 }

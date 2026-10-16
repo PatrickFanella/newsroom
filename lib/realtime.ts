@@ -1,4 +1,4 @@
-import { waitUntil } from '@vercel/functions';
+import { waitUntil } from './background';
 
 // Server-side Realtime broadcast.
 // Fires a lightweight "changed" ping so open deck/mod/questions views can
@@ -10,6 +10,7 @@ import { waitUntil } from '@vercel/functions';
 // rides the (anon-subscribable) websocket.
 
 async function sendBroadcastChange(topic: string, streamId: string): Promise<void> {
+  if (process.env.DATABASE_MODE === 'postgres') return;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key || !streamId) {

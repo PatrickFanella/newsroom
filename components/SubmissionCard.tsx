@@ -9,8 +9,16 @@ import { ArchiveButton } from './ArchiveButton';
 import { TriggerWarningBanner } from './TriggerWarning';
 import { EnrichmentStatus, type EnrichmentState } from './EnrichmentStatus';
 
-type Submission = {
+import { EnrichmentEvidence } from './EnrichmentEvidence';
+import type { EnrichmentEvidence as Evidence } from '@/lib/enrichment-evidence';
+
+import type { ReviewState } from '@/lib/review-coordination';
+
+type Submission = ReviewState & {
   id: string;
+  extraction_evidence?: Evidence | null;
+  summary_evidence?: Evidence | null;
+  story_bundle_id?: string | null;
   url: string;
   kind: string;
   status: string;
@@ -47,6 +55,7 @@ type Submission = {
   // "Watching:" chat post — see lib/title-override.ts.
   title_override: string | null;
   enrichment_state?: EnrichmentState;
+  enrichment_error?: string | null;
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -161,7 +170,7 @@ export function SubmissionCard({
             {s.summary || s.description}
           </p>
         )}
-        <EnrichmentStatus key={`${s.id}:${s.enrichment_state}`} id={s.id} state={s.enrichment_state} retryable={s.status === 'approved'} />
+        <EnrichmentStatus key={`${s.id}:${s.enrichment_state}`} id={s.id} state={s.enrichment_state} error={s.enrichment_error} retryable={s.status === 'approved'} />
         {!compact && s.topics && s.topics.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {s.topics.map((t) => (
@@ -171,6 +180,7 @@ export function SubmissionCard({
             ))}
           </div>
         )}
+        <EnrichmentEvidence summary={s.summary} extraction_evidence={s.extraction_evidence} summary_evidence={s.summary_evidence} />
         <div className="mt-1">
           <ArchiveButton id={s.id} url={s.url} archiveUrl={s.archive_url} />
         </div>

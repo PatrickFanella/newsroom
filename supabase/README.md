@@ -21,12 +21,11 @@ npx supabase link --project-ref <ref>
 # Mark the baseline as already applied, without running it.
 npx supabase migration repair --status applied 20260909182636
 
-# Now push the migrations that come after it — right now, just the one
-# adding queue_overview() (see app/api/queue/route.ts for why).
+# Review migration history, then push the migrations that come after it.
 npx supabase db push
 ```
 
-After that, `supabase migration list` should show both migrations as
+After that, `supabase migration list` should show the reviewed migrations as
 applied on both local history and the remote project, and you're on the
 normal workflow below.
 
@@ -71,3 +70,160 @@ Postgres version (`show server_version;` on the remote database) if it
 ever drifts from the default. Nothing here requires the local dev stack
 (`supabase start`, Docker) — the app talks to the hosted project directly,
 the CLI is only used for `migration`/`db push`/`link`.
+
+## Play-history and export migration
+
+Apply `20261014003000_play_history_exports.sql` before deploying the matching
+application code. It adds transactional play-note triggers, per-note export
+receipts, and a lease for Discord posts. It does not depend on the approval
+enrichment migration.
+
+Review the legacy history before rollout: duplicate linked notes and notes
+whose linked submission is no longer played are marked cancelled, with their
+contents retained. Detached notes from cleared submissions remain active.
+Existing Markdown and Discord timestamps seed their respective receipts.
+
+The application no longer inserts a separate note after a play update. The
+triggers must be installed for each successful play to include its note.
+Reverting only the application also restores the old timestamp-based export
+readers; exports made by that old code do not maintain the new note receipts.
+Reconcile those receipts before upgrading again rather than assuming an
+application rollback preserves the new export guarantees.
+
+For a test database with all migrations applied:
+
+```bash
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/play_history_exports.sql
+```
+
+The fixture transaction rolls back. Do not run it against the linked hosted
+project.
+
+## Broadcast sessions
+
+`20261014010000_broadcast_sessions.sql` adds show sessions and stamps newly
+inserted show notes with the session covering their play time. Starting and
+ending a show lock the channel row; a partial unique index also prevents
+concurrent active shows for one channel. End retries retain the original end
+time. The saved rundown contains only approved items at show start.
+
+The server scopes all reads and writes to the signed session's channel.
+Session tables use RLS without client policies, and session RPCs are granted
+only to the service role. Historical notes are not backfilled into guessed
+shows. This migration works on main alone and also with the separate
+play-history/export migration; cancelled plays are excluded when its
+cancellation column exists.
+
+Run the SQL contract after migrations in a disposable database using
+`psql -v ON_ERROR_STOP=1 -f supabase/tests/broadcast_sessions.sql`. It rolls
+back its fixtures and checks channel isolation, active-session uniqueness,
+idempotent ending, delayed-note timing, snapshot retention, cursor ties,
+and optional play-history compatibility.
+
+## Queue search and pagination
+
+`20261014020000_queue_search.sql` adds the server-only `search_queue` RPC and
+a channel/status/timestamp/id index. Moderator reads opt into it with
+`/api/queue?page=1&status=pending&q=budget&kind=article`; subsequent pages
+send the returned `nextCursor` as `before`. Search returns up to 50 items,
+an exact matching count, and a timestamp/UUID cursor. Microsecond timestamp
+precision is retained, and the UUID resolves tied timestamps. Legacy null
+creation times sort at the Unix epoch so those items remain reachable.
+
+The server validates the status, media type, 200-character search limit, and
+cursor before calling the RPC, and supplies the channel from the signed
+session. The function uses literal substring matching across each searchable
+field, with no user-supplied SQL, wildcard syntax, or PostgREST filter strings.
+Only the service role can execute it. Unpaged queue reads retain their
+existing response shape and deck ordering.
+
+Apply the migration before deploying the moderator UI. A missing search RPC
+returns HTTP 503 rather than a successful but capped fallback. Run
+`psql -v ON_ERROR_STOP=1 -f supabase/tests/queue_search.sql` in a disposable
+database after migrations to check isolation, filters, literal characters,
+large backlogs, cursor ties, concurrent head inserts, and RPC privileges.
+The test rolls back its fixtures.
+
+## Review coordination
+
+`20261014030000_review_coordination.sql` adds editorial revisions and review
+lease fields to submissions. `advance_submission_revision` increments the
+revision for status, notes, warning, title override, placement, approval/play
+timing, and approval-attribution changes through any write path. It ignores
+metadata/AI/archive writes and lease changes, and clears claims when an item
+leaves pending.
+
+`set_submission_review_claim` and `apply_submission_review` lock the scoped
+submission row before checking ownership or revision. Claim acquisition and
+editorial writes therefore serialize across competing reviewers. Renewal
+and release require the current lease token, including owner-forced release.
+The server supplies actor identity and channel from the signed session;
+forced release is authorized only for the channel owner. Neither RPC is
+available directly to anonymous or authenticated clients.
+
+Apply the migration before deploying the updated queue PATCH route. Missing
+coordination RPCs fail closed with HTTP 503. Existing unversioned clients
+continue to write through the same RPC and honor claims; they do not gain
+optimistic revision checks. Moderator drafts capture their revision when the
+editor opens, and Undo uses the revision returned by the committed action.
+
+Run `psql -v ON_ERROR_STOP=1 -f supabase/tests/review_coordination.sql` in a
+disposable database after migrations. Its rolled-back fixtures check channel
+isolation, leases, fencing, owner release, stale edits/Undo, editorial versus
+metadata changes, legacy requests, and RPC privileges.
+
+## Enrichment evidence
+
+`20261014040000_enrichment_evidence.sql` adds nullable extraction and summary
+input-evidence JSON to submissions. Existing rows remain null. Basic
+extraction updates only extraction evidence; AI analysis writes its own input
+record alongside the generated fields, so late basic metadata cannot relabel
+a summary's inputs. Apply the migration before deploying extraction changes.
+Evidence records contain bounded metadata rather than fetched content.
+## Story bundles
+
+`20261014050000_story_bundles.sql` builds on broadcast sessions. It adds
+channel-owned bundles, one bundle per lead submission, revision-checked
+editing, and server-only RPCs. Sources are validated and bounded by the API;
+JSON snapshots contain title, prep notes, source roles/links, and lead metadata.
+The new migration extends `start_broadcast` without editing its original
+migration. Existing show snapshots remain unchanged.
+
+Bundle creation locks the lead row, so duplicate requests return the same
+bundle. Edits lock the bundle row and reject stale revisions. The API supplies
+the channel from the signed session and requires existing curation permission
+for mutations. Queue approval can include an expected status, checked before
+external work and again inside the final locked review transaction.
+
+A submission trigger captures bundle context at the play write. The atomic
+play-history trigger inserts the note in that same transaction, and the note
+trigger stamps the captured bundle version. This prevents
+intervening bundle edits from changing the play's recorded context. Clearing
+a lead sets its bundle reference to null while retaining lead metadata and
+show/note snapshots. Bundle history uses 50-item timestamp/UUID pages.
+
+Apply this migration after `20261014010000_broadcast_sessions.sql`. Run
+`psql -v ON_ERROR_STOP=1 -f supabase/tests/story_bundles.sql` in a disposable
+database to check isolation, idempotency, conflicts, snapshots, retention,
+pagination, and privileges. Its fixtures roll back.
+
+## Complete feature integration
+
+Apply all pending migrations in timestamp order through
+`20261014150000_feature_integration.sql` before deploying the combined application.
+That final migration composes review status fencing, audit attribution, and atomic
+play history; it replaces the five-argument review RPC with a six-argument RPC.
+Deploy the matching application after this migration. The sixth argument is
+optional for older revision-aware callers. Older applications that insert play
+notes themselves still need the play-history rollback review described above.
+
+The integration also snapshots preparation and segment timing at show start.
+Usage-blocked enrichment remains skipped until a manual retry; automatic recovery
+continues to recover queued or interrupted jobs. Intentionally skipped tweets do
+not become retryable.
+
+Feature-specific rollout details live in [PREPARATION_TEMPLATES.md](PREPARATION_TEMPLATES.md),
+[TIMING_TARGETS.md](TIMING_TARGETS.md), and the documents in [docs](../docs/):
+usage budgets, moderator activity, broadcast history search, Discord exports,
+carry forward, public episodes, and automatic Twitch shows. The CI database job applies every migration to an
+empty PostgreSQL 17 fixture and runs every SQL contract with rollback.

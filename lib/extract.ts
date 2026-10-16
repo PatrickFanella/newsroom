@@ -3,17 +3,19 @@ import { hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
 import { recordUsage } from './usage';
 import { extractMetaForKind, enrichExtractedMeta } from './extract-kind';
+import { inputEvidence } from './enrichment-evidence';
 
 // Pending links get metadata and free risk signals. Approved links are
 // enriched under a durable lease in submission-enrichment.ts.
 export async function extractSubmissionFields(
   sub: { url: string; kind: string; stream_id: string },
   includeAi: boolean,
-): Promise<{ fields: Record<string, unknown>; failureReason?: string }> {
+): Promise<{ fields: Record<string, unknown>; failureReason?: string; skippedReason?: string }> {
   const meta =
     (await extractMetaForKind(sub.url, sub.kind)) ??
     (await extractMetaForKind(sub.url, 'article'))!;
   const patch: Record<string, unknown> = {
+    extraction_evidence: inputEvidence(meta.evidenceSource ?? 'unavailable', meta.bodyText),
     title: meta.title,
     description: meta.description,
     thumbnail_url: meta.thumbnail,
@@ -25,12 +27,15 @@ export async function extractSubmissionFields(
     content_warning: scanContentWarning(meta.title, meta.description),
   };
   let failureReason: string | undefined;
+  let skippedReason: string | undefined;
   if (includeAi) {
     const enriched = await enrichExtractedMeta({
       url: sub.url, kind: sub.kind, meta, streamId: sub.stream_id,
     });
     failureReason = enriched.failureReason;
-    if (!failureReason) Object.assign(patch, {
+    skippedReason = enriched.skippedReason;
+    patch.summary_evidence = enriched.evidence;
+    if (!failureReason && !skippedReason) Object.assign(patch, {
       summary: enriched.summary,
       credibility_tag: enriched.credibility,
       topics: enriched.topics,
@@ -39,7 +44,7 @@ export async function extractSubmissionFields(
     });
   }
   await recordUsage({ streamId: sub.stream_id, kind: 'extract', meta: { kind: sub.kind } });
-  return { fields: patch, failureReason };
+  return { fields: patch, failureReason, skippedReason };
 }
 
 async function extractAndWrite(submissionId: string, includeAi: boolean): Promise<void> {
@@ -60,6 +65,8 @@ async function extractAndWrite(submissionId: string, includeAi: boolean): Promis
   } catch (err) {
     console.error(`${includeAi ? 'AI enrichment' : 'extraction'} failed for`, submissionId, err);
     await sb.from('submissions').update({
+      extraction_evidence: inputEvidence('unavailable', null, 'failed'),
+      ...(includeAi ? { summary_evidence: inputEvidence('unavailable', null, 'failed') } : {}),
       dmca_risk: hostDMCARisk(sub.url),
     }).eq('id', sub.id).eq('status', 'pending');
   }

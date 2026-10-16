@@ -9,6 +9,8 @@
 // move only; no rendered output changed.
 
 import type { Submission } from '@/components/SubmissionCard';
+import { EnrichmentEvidence } from '@/components/EnrichmentEvidence';
+import { LiveStoryBundle } from '@/components/StoryBundle';
 import { extractYouTubeId, formatDuration, formatDate, formatClock } from '@/lib/url';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { Icon } from '@/components/ui/icon';
@@ -129,7 +131,10 @@ export function ActiveItemCard({
           {active.summary || active.description}
         </p>
       )}
-      <EnrichmentStatus key={`${active.id}:${active.enrichment_state}`} id={active.id} state={active.enrichment_state} />
+      <EnrichmentStatus key={`${active.id}:${active.enrichment_state}`} id={active.id} state={active.enrichment_state} error={active.enrichment_error} />
+
+      <EnrichmentEvidence summary={active.summary} extraction_evidence={active.extraction_evidence} summary_evidence={active.summary_evidence} />
+      <LiveStoryBundle key={active.id} submissionId={active.id} bundleId={active.story_bundle_id} />
 
       {active.mod_notes && (
         <div className="max-w-3xl mb-6 border-l-4 border-ochre bg-ochre/10 px-4 py-3">

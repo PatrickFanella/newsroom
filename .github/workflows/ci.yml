@@ -2,28 +2,75 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/complete-feature-integration]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.18.0
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Type check
-        run: npx tsc --noEmit
-
       - name: Lint
         run: npm run lint
-
       - name: Test
         run: npm test
+      - name: Production build and type check
+        run: npm run build
+      - name: Verify Vercel build configuration
+        run: npm run check:deployment -- --build-only
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-fixture-only
+          POSTGRES_DB: newsroom_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-fixture-only
+      PGDATABASE: newsroom_ci
+    steps:
+      - uses: actions/checkout@v6
+      - name: Create fixture roles
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;"
+      - name: Apply every migration in order
+        run: |
+          set -euo pipefail
+          for file in supabase/migrations/*.sql; do
+            echo "Applying $file"
+            psql -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Run database contracts
+        run: |
+          set -euo pipefail
+          for file in supabase/tests/*.sql; do
+            echo "Checking $file"
+            psql -v ON_ERROR_STOP=1 -f "$file"
+          done

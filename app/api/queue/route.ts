@@ -7,6 +7,8 @@ import { processSubmissionEnrichment, recoverSubmissionEnrichment } from '@/lib/
 import { normalizeTitleOverride } from '@/lib/title-override';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
+import { parseQueueSearch } from '@/lib/queue-search';
+import { expectedReviewRevision, reviewConflict, reviewConflictMessage } from '@/lib/review-coordination';
 
 export const maxDuration = 60;
 
@@ -97,24 +99,32 @@ export async function GET(req: NextRequest) {
 
   const status = req.nextUrl.searchParams.get('status'); // pending|approved|played|rejected|null
   const sb = supabaseAdmin();
-  let q = sb
-    .from('submissions')
-    .select('*')
-    .eq('stream_id', session.streamId)
-    .order('position', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(200);
-  if (status) q = q.eq('status', status);
+  let search;
+  try { search = parseQueueSearch(req.nextUrl.searchParams); }
+  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid search.' }, { status: 400 }); }
 
-  // Counts (for the tab labels, independent of the active filter) and
-  // now-playing (for the mod view), fetched together via one RPC — see
-  // queue_overview() in supabase/migrations — instead of the 5 separate
-  // per-status counts plus a sequential now-playing lookup this replaced.
+  // Paginated triage searches use their own newest-first ordering. Unpaged
+  // deck reads keep their existing position order and response shape.
+  const query = search
+    ? sb.rpc('search_queue', {
+      p_stream_id: session.streamId, p_status: search.status, p_query: search.query,
+      p_kind: search.kind || null, p_before: search.before, p_before_id: search.beforeId,
+    })
+    : (() => {
+      let q = sb.from('submissions').select('*').eq('stream_id', session.streamId)
+        .order('position', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false }).limit(200);
+      if (status) q = q.eq('status', status);
+      return q;
+    })();
   const [{ data, error }, ov] = await Promise.all([
-    q,
+    query,
     sb.rpc('queue_overview', { p_stream_id: session.streamId }).maybeSingle(),
   ]);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    const missingSearch = search && ['42883', 'PGRST202'].includes(error.code);
+    return NextResponse.json({ error: missingSearch ? 'Queue search is temporarily unavailable.' : 'Could not load the queue.' }, { status: missingSearch ? 503 : 500 });
+  }
 
   const overview: QueueOverviewRow = !ov.error && ov.data
     ? (ov.data as QueueOverviewRow)
@@ -123,7 +133,8 @@ export async function GET(req: NextRequest) {
   waitUntil(recoverSubmissionEnrichment(session.streamId));
 
   return NextResponse.json({
-    submissions: data || [],
+    submissions: search ? data?.submissions ?? [] : data || [],
+    ...(search ? { nextCursor: data?.next_cursor ?? null, matchedCount: data?.matched_count ?? 0 } : {}),
     nowPlaying: overview.now_playing,
     counts: {
       pending: overview.pending,
@@ -139,10 +150,15 @@ export async function PATCH(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid action.' }, { status: 400 });
+  let expectedRevision: number | null;
+  try { expectedRevision = expectedReviewRevision(body); }
+  catch { return NextResponse.json({ error: 'Invalid item revision.' }, { status: 400 }); }
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
 
+  if ('expectedStatus' in body && !['pending','approved','played','rejected'].includes(body.expectedStatus)) return NextResponse.json({ error: 'Invalid expected status.' }, { status: 400 });
   // Status/notes are mod triage; reassigning a segment or position is curation,
   // so gate those fields behind curate permission (the streamer always passes).
   const isCuration = 'segment_id' in body || typeof body.position === 'number';
@@ -150,6 +166,18 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
+  const sb = supabaseAdmin();
+  // Fail before external work when the caller already has a stale snapshot.
+  // The RPC repeats both checks while holding the row lock at commit time.
+  const { data: current, error: readError } = await sb.from('submissions').select('*')
+    .eq('id', id).eq('stream_id', session.streamId).maybeSingle();
+  if (readError) return NextResponse.json({ error: 'Could not load the item.' }, { status: 500 });
+  if (!current) return NextResponse.json({ error: 'Item not found.' }, { status: 404 });
+  if (body.expectedStatus && current.status !== body.expectedStatus) return NextResponse.json({ error: 'Lead item changed. Refresh before approving.' }, { status: 409 });
+  const conflict = reviewConflict(current, session.accountId, expectedRevision);
+  if (conflict) return NextResponse.json({ error: conflict, detail: reviewConflictMessage(conflict) }, { status: 409 });
+
+  if (body.status && !['pending', 'approved', 'played', 'rejected'].includes(body.status)) return NextResponse.json({ error: 'Invalid status.' }, { status: 400 });
   const patch: Record<string, unknown> = {};
   if (body.status) {
     patch.status = body.status;
@@ -168,10 +196,9 @@ export async function PATCH(req: NextRequest) {
       patch.approved_by_login = null;
       patch.approved_by_display_name = null;
     }
-    if (body.status === 'played') patch.played_at = new Date().toISOString();
   }
   if (typeof body.position === 'number') patch.position = body.position;
-  if (typeof body.mod_notes === 'string') patch.mod_notes = body.mod_notes;
+  if ('mod_notes' in body) patch.mod_notes = typeof body.mod_notes === 'string' ? body.mod_notes : null;
   // Unlike mod_notes, this one accepts an explicit null: a trigger warning is
   // published to chat and the on-air overlay, so taking one back off an item
   // has to be as possible as putting it on.
@@ -189,6 +216,11 @@ export async function PATCH(req: NextRequest) {
     const pn = typeof body.prep_note === 'string' ? body.prep_note.trim() : '';
     patch.prep_note = pn || null;
   }
+  // The database snapshots this takeaway into show_notes atomically with
+  // the play transition. It also cancels that note when Played is undone.
+  if (body.status === 'played' && 'takeaway' in body) {
+    patch.prep_note = typeof body.takeaway === 'string' ? body.takeaway.trim() || null : null;
+  }
   // Streamer's replacement for the title shown on the overlay and in the
   // "Watching:" chat post (the scraped title itself is left alone). Accepts
   // an explicit null/blank to clear it, same reasoning as trigger_warning —
@@ -196,8 +228,6 @@ export async function PATCH(req: NextRequest) {
   // than reorganizing the deck.
   if ('title_override' in body) patch.title_override = normalizeTitleOverride(body.title_override);
   if (typeof body.duration_on_screen_s === 'number') patch.duration_on_screen_s = body.duration_on_screen_s;
-
-  const sb = supabaseAdmin();
 
   // Assign to a segment (or back to ungrouped). Append to the end of the
   // target group so it lands at the bottom of that segment.
@@ -232,12 +262,7 @@ export async function PATCH(req: NextRequest) {
   // Keep duplicate checks on the approval path; paid enrichment and related
   // coverage run in the background after the approval has been saved.
   if (body.status === 'approved') {
-    const { data: sub } = await sb
-      .from('submissions')
-      .select('normalized_url')
-      .eq('id', id)
-      .eq('stream_id', session.streamId)
-      .single();
+    const sub = current;
 
     // The deck must never contain duplicates, regardless of the stream's
     // allow_duplicates setting (which only governs the overall queue). Block
@@ -264,34 +289,20 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  const { data, error } = await sb
-    .from('submissions')
-    .update(patch)
-    .eq('id', id)
-    .eq('stream_id', session.streamId)
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const { data: saved, error } = await sb.rpc('apply_submission_review', {
+    p_stream_id: session.streamId, p_id: id, p_actor_id: session.accountId,
+    p_patch: patch, p_expected_revision: expectedRevision, p_expected_status: body.expectedStatus ?? null,
+  });
+  if (error) return NextResponse.json({ error: 'Review coordination is temporarily unavailable.' }, { status: 503 });
+  if (saved?.error) return NextResponse.json({ error: saved.error, detail: reviewConflictMessage(saved.error) }, { status: saved.error === 'not_found' ? 404 : 409 });
+  const data = saved?.submission;
+  if (!data) return NextResponse.json({ error: 'Could not save the item.' }, { status: 500 });
 
   // The trigger persists queued work atomically with approval. External
   // providers run after the response, under a database lease; queue reads
   // recover work left queued or interrupted by a function timeout.
   if (body.status === 'approved' && data) {
     waitUntil(processSubmissionEnrichment(id, session.streamId));
-  }
-
-  // If marked played, create a show_notes entry
-  if (body.status === 'played' && data) {
-    await sb.from('show_notes').insert({
-      stream_id: session.streamId,
-      submission_id: data.id,
-      played_at: data.played_at,
-      title: data.title,
-      url: data.url,
-      summary: data.summary,
-      archive_url: data.archive_url,
-      takeaway: body.takeaway || null,
-    });
   }
 
   broadcastQueueChange(session.streamId);

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { SwipeRow } from '@/components/SwipeRow';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
@@ -20,6 +20,8 @@ import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { QUEUE_MEDIA_KINDS, queueSearchUrl, type QueueMediaKind } from '@/lib/queue-search';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
@@ -27,6 +29,9 @@ import { resolveTitle } from '@/lib/title-override';
 import { AnnounceButton } from './AnnounceButton';
 import { CopyButton } from './CopyButton';
 import { ModActions } from './ModActions';
+import { ReviewClaimControls } from '@/components/ReviewClaimControls';
+import { activeReviewClaim } from '@/lib/review-coordination';
+import { StoryBundleLink } from '@/components/StoryBundle';
 
 const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
@@ -35,18 +40,23 @@ function isStatusKey(s: string): s is StatusKey {
 }
 
 type Counts = { pending: number; approved: number; played: number; rejected: number; total: number };
-type QueueData = { submissions: Submission[]; nowPlaying: Submission | null; counts: Counts };
+type QueueData = { submissions: Submission[]; nowPlaying: Submission | null; counts: Counts; nextCursor: string | null; matchedCount: number };
 
 const EMPTY_COUNTS: Counts = { pending: 0, approved: 0, played: 0, rejected: 0, total: 0 };
 
-async function fetchQueue(filter: string): Promise<QueueData> {
-  const r = await fetch(`/api/queue?status=${filter}`);
-  if (!r.ok) throw new Error('Failed to load queue');
+async function fetchQueue(filter: string, query: string, kind: string, cursor: string | null): Promise<QueueData> {
+  const r = await fetch(queueSearchUrl(filter, query, kind, cursor));
+  if (!r.ok) {
+    const error = await r.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to load queue');
+  }
   const data = await r.json();
   return {
     submissions: data.submissions || [],
     nowPlaying: data.nowPlaying || null,
     counts: data.counts || EMPTY_COUNTS,
+    nextCursor: data.nextCursor ?? null,
+    matchedCount: data.matchedCount ?? data.submissions?.length ?? 0,
   };
 }
 
@@ -56,6 +66,7 @@ export function ModView({
   streamDisplayName,
   submitCommand,
   streamId,
+  actorId,
   isMod = false,
   isAdmin = false,
   canCurate = false,
@@ -69,6 +80,7 @@ export function ModView({
   streamDisplayName: string;
   submitCommand: string | null;
   streamId: string;
+  actorId: string;
   isMod?: boolean;
   isAdmin?: boolean;
   canCurate?: boolean;
@@ -81,24 +93,42 @@ export function ModView({
   const headerRef = useRef<HTMLElement>(null);
   const headerHeight = useElementHeight(headerRef);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
-  const queueKey = queryKeys.queue(streamId, filter);
-  const queueKeyAllFilters = queryKeys.queue(streamId); // prefix — matches every filter's cached query
-
-  // keepPreviousData means switching tabs keeps showing the last filter's
-  // list while the new one loads, instead of flashing back to the skeleton —
-  // matches the original's behavior of never resetting `loaded` after the
-  // first fetch. refetchInterval replaces the old useVisiblePoll(120s)
-  // backstop (it already pauses in background tabs by default).
-  const { data, isPending: loading } = useQuery({
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState<QueueMediaKind | ''>('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  const queueKey = queryKeys.queueSearch(streamId, filter, search, kind);
+  const queueKeyAllFilters = queryKeys.queue(streamId);
+  const queue = useInfiniteQuery({
     queryKey: queueKey,
-    queryFn: () => fetchQueue(filter),
-    placeholderData: keepPreviousData,
-    refetchInterval: 120000,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => fetchQueue(filter, search, kind, pageParam),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    refetchInterval: 30000,
   });
-  const submissions = data?.submissions ?? [];
-  const nowPlaying = data?.nowPlaying ?? null;
-  const counts = data?.counts ?? EMPTY_COUNTS;
-  const loaded = !loading;
+  // Each search/status/type combination owns its pages. Do not keep another
+  // filter's rows visible and actionable while the new query is loading.
+  const firstPage = queue.data?.pages[0];
+  const submissions = [...new Map((queue.data?.pages.flatMap(page => page.submissions) ?? []).map(item => [item.id, item])).values()];
+  const nowPlaying = firstPage?.nowPlaying ?? null;
+  const counts = firstPage?.counts ?? EMPTY_COUNTS;
+  const loaded = !queue.isPending;
+  const changingSearch = searchInput.trim() !== search;
+  const filtered = !!search || !!kind;
+  const resetSearch = () => { setSearchInput(''); setSearch(''); setKind(''); };
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const claimedByOther = (item: Submission) => activeReviewClaim(item, now) && item.review_claim_actor_id !== actorId;
+  const updateReviewItem = (item: Partial<Submission> & { id: string }) => {
+    queryClient.setQueryData<InfiniteData<QueueData>>(queueKey, (prev) => prev ? { ...prev, pages: prev.pages.map(page => ({ ...page, submissions: page.submissions.map(s => s.id === item.id ? { ...s, ...item } : s) })) } : prev);
+    queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
+  };
 
   // Refetch instantly when the server broadcasts a queue change — invalidate
   // every filter's cached query (not just the one currently on screen) so
@@ -144,6 +174,10 @@ export function ModView({
       });
       if (!r.ok) {
         const e = await r.json().catch(() => ({}));
+        if (r.status === 409) {
+          queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
+          toast.error(e.detail || 'This item changed. Your action was not saved.');
+        }
         throw new Error(e.detail || e.error || 'Action failed');
       }
       return r.json();
@@ -153,7 +187,10 @@ export function ModView({
   const mutate = async (
     id: string,
     patch: Record<string, unknown>,
-  ): Promise<{ ok: boolean; error?: string }> => {
+    revision?: number,
+  ): Promise<{ ok: boolean; error?: string; revision?: number }> => {
+    if (changingSearch || queue.isPending) return { ok: false, error: 'Wait for the current search results.' };
+    const expectedRevision = revision ?? submissions.find(s => s.id === id)?.editorial_revision;
     setRowErrors((prev) => {
       if (!(id in prev)) return prev;
       const next = { ...prev };
@@ -167,10 +204,11 @@ export function ModView({
     // both a jarring flash and wipes any row-local UI state.
     setPendingIds((prev) => new Set(prev).add(id));
 
-    let result: { ok: boolean; error?: string };
+    let result: { ok: boolean; error?: string; revision?: number };
     try {
-      await statusMutation.mutateAsync({ id, patch });
-      result = { ok: true };
+      const saved = await statusMutation.mutateAsync({ id, patch: { ...patch, ...(expectedRevision !== undefined ? { expectedRevision } : {}) } });
+      if (saved.submission) updateReviewItem(saved.submission);
+      result = { ok: true, revision: saved.submission?.editorial_revision };
     } catch (err) {
       result = { ok: false, error: err instanceof Error ? err.message : 'Action failed' };
     }
@@ -191,19 +229,16 @@ export function ModView({
     const prevItem = submissions.find((s) => s.id === id);
     const newStatus = typeof patch.status === 'string' ? patch.status : null;
     if (prevItem && newStatus && newStatus !== filter && isStatusKey(prevItem.status) && isStatusKey(newStatus)) {
-      queryClient.setQueryData<QueueData>(queueKey, (prev) => {
+      queryClient.setQueryData<InfiniteData<QueueData>>(queueKey, (prev) => {
         if (!prev) return prev;
         const fromStatus = prevItem.status as StatusKey;
         const toStatus = newStatus as StatusKey;
-        return {
-          ...prev,
-          submissions: prev.submissions.filter((s) => s.id !== id),
-          counts: {
-            ...prev.counts,
-            [fromStatus]: Math.max(0, prev.counts[fromStatus] - 1),
-            [toStatus]: prev.counts[toStatus] + 1,
-          },
-        };
+        return { ...prev, pages: prev.pages.map(page => ({
+          ...page,
+          submissions: page.submissions.filter((s) => s.id !== id),
+          matchedCount: Math.max(0, page.matchedCount - 1),
+          counts: { ...page.counts, [fromStatus]: Math.max(0, page.counts[fromStatus] - 1), [toStatus]: page.counts[toStatus] + 1 },
+        })) };
       });
     }
     // Auto-archive on approval (fire-and-forget; the snapshot link appears
@@ -216,7 +251,7 @@ export function ModView({
       }).catch(() => {});
     }
     queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
-    return { ok: true };
+    return result;
   };
 
   // Approve/reject are the two actions a triage mod fires off fastest — a
@@ -230,10 +265,10 @@ export function ModView({
   // segmentId is undefined for the plain Approve button (lands wherever the
   // server default puts it — ungrouped) and null/an id when a destination was
   // explicitly picked from the segment menu or a number-key shortcut.
-  const approveItem = async (id: string, note: string, segmentId?: string | null) => {
+  const approveItem = async (id: string, note: string, segmentId?: string | null, revision?: number) => {
     const patch: Record<string, unknown> = { status: 'approved', mod_notes: note || null };
     if (segmentId !== undefined) patch.segment_id = segmentId;
-    const result = await mutate(id, patch);
+    const result = await mutate(id, patch, revision);
     if (result.ok) {
       const destination = segmentId ? segmentNameById.get(segmentId) : null;
       toast(destination ? `Approved → ${destination}` : 'Approved', {
@@ -243,7 +278,7 @@ export function ModView({
           // An explicit destination was picked, so clear it back out on undo —
           // otherwise a later plain re-approve would silently inherit the old
           // segment instead of landing back in ungrouped.
-          onClick: () => mutate(id, segmentId !== undefined ? { status: 'pending', segment_id: null } : { status: 'pending' }),
+          onClick: () => mutate(id, segmentId !== undefined ? { status: 'pending', segment_id: null } : { status: 'pending' }, result.revision),
         },
       });
     }
@@ -255,7 +290,7 @@ export function ModView({
     if (result.ok) {
       toast('Rejected', {
         duration: 5000,
-        action: { label: 'Undo', onClick: () => mutate(id, { status: 'pending' }) },
+        action: { label: 'Undo', onClick: () => mutate(id, { status: 'pending' }, result.revision) },
       });
     }
     return result;
@@ -301,7 +336,7 @@ export function ModView({
   }, [submissions.length]);
   useEffect(() => {
     setFocusedIndex(0);
-  }, [filter]);
+  }, [filter, search, kind]);
 
   // Held in a ref so the single listener always sees the latest state —
   // same pattern as the deck's keyboard handler (app/deck/DeckView.tsx).
@@ -311,7 +346,7 @@ export function ModView({
     // (e.g. the per-item note).
     const el = e.target as HTMLElement | null;
     const tag = el?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
 
     if (e.key === '?') {
       e.preventDefault();
@@ -321,7 +356,7 @@ export function ModView({
 
     // Navigate/approve/reject only mean something on the pending tab —
     // that's the only tab these shortcuts' target buttons render on.
-    if (filter !== 'pending' || submissions.length === 0) return;
+    if (filter !== 'pending' || submissions.length === 0 || changingSearch || queue.isPending) return;
 
     const target = submissions[focusedIndex];
     if (e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown') {
@@ -330,13 +365,13 @@ export function ModView({
     } else if (e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp') {
       e.preventDefault();
       setFocusedIndex((i) => Math.max(i - 1, 0));
-    } else if ((e.key === 'a' || e.key === 'A') && target && !pendingIds.has(target.id)) {
+    } else if ((e.key === 'a' || e.key === 'A') && target && !pendingIds.has(target.id) && !claimedByOther(target)) {
       e.preventDefault();
       approveItem(target.id, '');
-    } else if ((e.key === 'r' || e.key === 'R') && target && !pendingIds.has(target.id)) {
+    } else if ((e.key === 'r' || e.key === 'R') && target && !pendingIds.has(target.id) && !claimedByOther(target)) {
       e.preventDefault();
       rejectItem(target.id);
-    } else if (/^[1-9]$/.test(e.key) && target && !pendingIds.has(target.id) && segments[Number(e.key) - 1]) {
+    } else if (/^[1-9]$/.test(e.key) && target && !pendingIds.has(target.id) && !claimedByOther(target) && segments[Number(e.key) - 1]) {
       // Approve the focused item straight into the Nth segment, in deck order.
       e.preventDefault();
       approveItem(target.id, '', segments[Number(e.key) - 1].id);
@@ -378,15 +413,16 @@ export function ModView({
       {/* Bar */}
       <AppHeader
         ref={headerRef}
-        className="border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
+        className="border-b-2 border-ink pl-10 pr-6 py-3 gap-6 [&>div]:flex-wrap [&>div]:max-w-full"
         section={<>mod triage{isMod && <> · {streamDisplayName}</>}</>}
         right={
           <>
-            <span className="uppercase tracking-widest">#{channel}</span>
+            <span className="uppercase tracking-widest break-words min-w-0 max-w-full">#{channel}</span>
             <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
+            <Link href="/moderation-history" className="underline hover:text-rust">Activity</Link>
             {/* Questions and Mod status are reached via the rail above, not a
                 header link — see the DeckRail block's comment. */}
             {/* Two different pages, deliberately: /setup is the channel and is
@@ -502,9 +538,34 @@ export function ModView({
         </span>
       </div>
 
+      <div className="pl-10 pr-3 sm:pr-6 py-4 border-b border-ink/20">
+        <div className="max-w-5xl mx-auto flex flex-wrap items-end gap-3">
+          <label className="flex-1 min-w-0 basis-60 font-mono text-xs">
+            Search queue
+            <Input type="search" value={searchInput} maxLength={200} onChange={(event) => setSearchInput(event.target.value)} placeholder="Title, URL, publisher, topic, or submitter" className="w-full mt-1" />
+          </label>
+          <label className="font-mono text-xs">
+            Media type
+            <select value={kind} onChange={(event) => setKind(event.target.value as QueueMediaKind | '')} className="block mt-1 border border-ink/20 bg-paper px-2 h-[34px] max-w-full">
+              <option value="">All media</option>
+              {QUEUE_MEDIA_KINDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+          {(searchInput || kind) && <Button size="sm" variant="outline" onClick={resetSearch}>Clear search filters</Button>}
+        </div>
+        <p role="status" className="max-w-5xl mx-auto mt-2 font-mono text-xs text-ink/60">
+          {changingSearch || queue.isPending ? 'Searching…' : firstPage ? `${submissions.length} of ${firstPage.matchedCount} ${filtered ? 'matching ' : ''}${filter} items · newest first` : ''}
+        </p>
+      </div>
+
       {/* List */}
       <main className="pl-10 pr-3 sm:pr-6 py-6 max-w-5xl mx-auto w-full">
-        {!loaded ? (
+        {queue.isError && !queue.data ? (
+          <div role="alert" className="py-12 text-center space-y-3">
+            <p className="text-rust font-mono text-sm">{queue.error.message}</p>
+            <Button variant="outline" size="sm" onClick={() => queue.refetch()}>Retry queue</Button>
+          </div>
+        ) : !loaded ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="card-paper p-4 flex gap-4">
@@ -523,16 +584,16 @@ export function ModView({
         {submissions.length === 0 && (
           <div className="text-center py-24">
             <p className="font-display text-2xl mb-2">
-              {filter === 'pending' && 'Waiting for the firehose…'}
-              {filter === 'approved' && 'Nothing approved yet.'}
-              {filter === 'played' && 'Nothing played yet.'}
-              {filter === 'rejected' && 'No rejected links.'}
+              {filtered ? 'No matching items.' : filter === 'pending' && 'Waiting for the firehose…'}
+              {!filtered && filter === 'approved' && 'Nothing approved yet.'}
+              {!filtered && filter === 'played' && 'Nothing played yet.'}
+              {!filtered && filter === 'rejected' && 'No rejected links.'}
             </p>
             <p className="text-ink/60 font-mono text-sm">
-              {filter === 'pending' && "When chat posts a link, it'll appear here in seconds."}
-              {filter === 'approved' && 'Approve pending links to send them to the streamer deck.'}
-              {filter === 'played' && 'Items the streamer marks played show up here.'}
-              {filter === 'rejected' && 'Rejected links land here — you can unreject any of them.'}
+              {filtered ? 'Try a different search, media type, or status tab.' : filter === 'pending' && "When chat posts a link, it'll appear here in seconds."}
+              {!filtered && filter === 'approved' && 'Approve pending links to send them to the streamer deck.'}
+              {!filtered && filter === 'played' && 'Items the streamer marks played show up here.'}
+              {!filtered && filter === 'rejected' && 'Rejected links land here — you can unreject any of them.'}
             </p>
           </div>
         )}
@@ -555,11 +616,16 @@ export function ModView({
                     <div className="font-mono text-xs text-rust w-full">⚠ {rowErrors[s.id]}</div>
                   )}
                   {s.status === 'pending' && (
+                    <ReviewClaimControls item={s} actorId={actorId} canReleaseOthers={!isMod} now={now} disabled={changingSearch || queue.isPending || pendingIds.has(s.id)} onChange={updateReviewItem} onRefresh={() => queryClient.invalidateQueries({ queryKey: queueKeyAllFilters })} />
+                  )}
+                  {s.status === 'pending' && (
                     <ModActions
                       id={s.id}
                       onApprove={approveItem}
                       onReject={rejectItem}
                       pending={pendingIds.has(s.id)}
+                      disabled={changingSearch || queue.isPending || claimedByOther(s)}
+                      revision={s.editorial_revision}
                       segments={segments}
                     />
                   )}
@@ -584,20 +650,21 @@ export function ModView({
                       someone actually watches the thing, which is usually
                       after it's been waved through. */}
                   {(s.status === 'pending' || s.status === 'approved') && (
-                    <div className="w-full">
+                    <fieldset disabled={changingSearch || queue.isPending || claimedByOther(s)} className="w-full min-w-0">
                       <TriggerWarningEditor
                         key={s.id}
                         value={s.trigger_warning}
-                        onSave={(v) => mutate(s.id, { trigger_warning: v })}
+                        revision={s.editorial_revision}
+                        onSave={(v, revision) => mutate(s.id, { trigger_warning: v }, revision)}
                       />
-                    </div>
+                    </fieldset>
                   )}
                   {s.status === 'rejected' && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => mutate(s.id, { status: 'pending' })}
-                      disabled={pendingIds.has(s.id)}
+                      disabled={pendingIds.has(s.id) || changingSearch || queue.isPending || claimedByOther(s)}
                     >
                       Unreject
                     </Button>
@@ -607,6 +674,7 @@ export function ModView({
                       ▶ played on air
                     </span>
                   )}
+                  {(s.story_bundle_id || (canCurate && ['pending','approved'].includes(s.status))) && <StoryBundleLink submissionId={s.id} bundleId={s.story_bundle_id} canManage={canCurate} />}
                   {canCurate && (
                     <SaveToListMenu
                       trigger={
@@ -649,7 +717,7 @@ export function ModView({
             return (
               <SwipeRow
                 key={s.id}
-                disabled={pendingIds.has(s.id)}
+                disabled={pendingIds.has(s.id) || changingSearch || queue.isPending || claimedByOther(s)}
                 onApprove={() => approveItem(s.id, '')}
                 onReject={() => rejectItem(s.id)}
               >
@@ -658,6 +726,9 @@ export function ModView({
             );
           })}
         </div>
+        {queue.isError && queue.data && <p role="alert" className="font-mono text-xs text-rust mt-4">{queue.error.message}</p>}
+        {queue.hasNextPage && <Button className="mt-6" variant="outline" disabled={queue.isFetching || changingSearch} onClick={() => queue.fetchNextPage()}>{queue.isFetchingNextPage ? 'Loading more…' : 'Load more items'}</Button>}
+        {queue.isError && queue.data && !queue.hasNextPage && <Button className="mt-3" size="sm" variant="outline" onClick={() => queue.refetch()}>Retry queue</Button>}
           </>
         )}
       </main>

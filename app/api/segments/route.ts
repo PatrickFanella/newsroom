@@ -14,7 +14,7 @@ export async function GET() {
   const sb = supabaseAdmin();
   const { data, error } = await sb
     .from('segments')
-    .select('id, name, position, collapsed')
+    .select('id, name, position, collapsed, target_minutes')
     .eq('stream_id', session.streamId)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await sb
     .from('segments')
     .insert({ stream_id: session.streamId, name, position })
-    .select('id, name, position, collapsed')
+    .select('id, name, position, collapsed, target_minutes')
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

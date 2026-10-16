@@ -52,17 +52,21 @@ export function TriggerWarningEditor({
   onSave,
   label = 'Trigger warning',
   defaultOpen = false,
+  revision,
 }: {
   value: string | null;
-  onSave: (value: string | null) => Promise<{ ok?: boolean } | void> | void;
+  onSave: (value: string | null, revision?: number) => Promise<{ ok?: boolean } | void> | void;
   label?: string;
   /** Start expanded. For callers that already spent a tap getting here — the
    *  mobile deck's ⚠ button — where collapsing first would mean two taps to
    *  reach the field. */
   defaultOpen?: boolean;
+  revision?: number;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [draft, setDraft] = useState(value || '');
+  const [draftRevision, setDraftRevision] = useState(revision);
+  const changed = revision !== undefined && draftRevision !== undefined && revision !== draftRevision;
   const [saving, setSaving] = useState(false);
 
   const trimmed = draft.trim();
@@ -71,7 +75,7 @@ export function TriggerWarningEditor({
   const commit = async (next: string | null) => {
     setSaving(true);
     try {
-      const result = await onSave(next);
+      const result = await onSave(next, draftRevision);
       if (!result || result.ok !== false) setOpen(false);
     } catch {
       /* left open — the caller reports the failure in its own surface */
@@ -86,6 +90,7 @@ export function TriggerWarningEditor({
         type="button"
         onClick={() => {
           setDraft(value || '');
+          setDraftRevision(revision);
           setOpen(true);
         }}
         className="self-start font-mono text-xs uppercase tracking-widest text-rust/80 hover:text-rust"
@@ -102,6 +107,7 @@ export function TriggerWarningEditor({
       </span>
       <Textarea
         autoFocus
+        aria-label={label}
         rows={2}
         value={draft}
         maxLength={MAX_TRIGGER_WARNING_CHARS}
@@ -114,6 +120,12 @@ export function TriggerWarningEditor({
         {' '}
         {MAX_TRIGGER_WARNING_CHARS - draft.length} left.
       </p>
+      {changed && <div className="font-mono text-xs text-rust space-y-2">
+        <p>This item changed while you were editing. Your draft is kept.</p>
+        <p>Latest saved warning: {value || 'None'}</p>
+        <Button type="button" size="xs" variant="outline" onClick={() => { setDraft(value || ''); setDraftRevision(revision); }}>Load latest warning</Button>
+        <Button type="button" size="xs" variant="outline" onClick={() => setDraftRevision(revision)}>Use draft with latest item</Button>
+      </div>}
       <div className="flex gap-2 flex-wrap">
         <Button
           type="button"

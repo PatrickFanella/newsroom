@@ -9,6 +9,8 @@ import {
   resolveEventId,
   classifyDedupOutcome,
 } from '@/lib/twitch-eventsub';
+import { parseTwitchBoundary } from '@/lib/twitch-broadcast';
+import { broadcastSessionChange } from '@/lib/realtime';
 import { supabaseAdmin } from '@/lib/supabase';
 import { extractUrlsFromMessage } from '@/lib/url';
 import { submitUrlToQueue } from '@/lib/submit-url';
@@ -17,7 +19,7 @@ import { handleRaffleEntry } from '@/lib/raffle';
 import { announceSubmission } from '@/lib/announce';
 import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // Twitch EventSub message types
 const VERIFICATION = 'webhook_callback_verification';
@@ -112,7 +114,9 @@ export async function POST(req: NextRequest) {
     return new NextResponse('stale timestamp', { status: 403 });
   }
 
-  const body = JSON.parse(rawBody);
+  let body;
+  try { body=JSON.parse(rawBody); } catch { return new NextResponse('invalid body',{status:400}); }
+  if(!body || typeof body!=='object' || Array.isArray(body))return new NextResponse('invalid body',{status:400});
 
   // ── Verification challenge (subscription creation handshake) ──
   if (msgType === VERIFICATION) {
@@ -136,6 +140,19 @@ export async function POST(req: NextRequest) {
   // ── Chat message notification ─────────────────────────────────
   if (msgType !== NOTIFICATION) {
     return new NextResponse(null, { status: 204 });
+  }
+
+  if(body.subscription?.type==='stream.online' || body.subscription?.type==='stream.offline') {
+    let boundary;
+    try { boundary=parseTwitchBoundary(body.subscription.type,body.event,msgId,msgTs); }
+    catch { return new NextResponse('invalid lifecycle event',{status:400}); }
+    if(!boundary || body.subscription.condition?.broadcaster_user_id!==boundary.broadcasterId)return new NextResponse('invalid lifecycle condition',{status:400});
+    const {data,error}=await supabaseAdmin().rpc('apply_twitch_broadcast_event',{
+      p_broadcaster_id:boundary.broadcasterId,p_twitch_stream_id:boundary.twitchStreamId,p_message_id:boundary.messageId,p_message_at:boundary.messageAt,p_started_at:boundary.startedAt,p_online:boundary.online,
+    });
+    if(error)return new NextResponse('lifecycle persistence unavailable',{status:503});
+    if(data?.stream_id && ['started','rolled_over','ended'].includes(data.disposition))waitUntil(broadcastSessionChange(data.stream_id));
+    return new NextResponse(null,{status:204});
   }
 
   const event = body.event;

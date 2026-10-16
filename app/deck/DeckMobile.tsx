@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
+import { EnrichmentEvidence } from '@/components/EnrichmentEvidence';
+import { LiveStoryBundle } from '@/components/StoryBundle';
 import { formatClock, formatDuration, kindTint } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -16,6 +18,8 @@ import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { RafflePanel } from '@/components/RafflePanel';
 import { EnrichmentStatus } from '@/components/EnrichmentStatus';
+
+import { BroadcastControls } from '@/components/BroadcastControls';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -348,6 +352,7 @@ export function DeckMobile({
               )}
               {chatEnabled && <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>}
               <DropdownMenuItem asChild><Link href="/shelf">Shelf</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/bundles">Bundles</Link></DropdownMenuItem>
               {!curateOnly && (
                 <DropdownMenuItem asChild><Link href="/setup">Settings</Link></DropdownMenuItem>
               )}
@@ -356,7 +361,12 @@ export function DeckMobile({
               )}
               {!curateOnly && (
                 <DropdownMenuItem asChild>
-                  <a href="/api/notes?format=markdown&commit=1">Export notes</a>
+                  <a href="/api/notes?format=markdown&commit=1">Export new notes</a>
+                </DropdownMenuItem>
+              )}
+              {!curateOnly && (
+                <DropdownMenuItem asChild>
+                  <a href="/api/notes?format=markdown&scope=all">Download all history</a>
                 </DropdownMenuItem>
               )}
               {!curateOnly && discordWebhookConfigured && (
@@ -387,6 +397,7 @@ export function DeckMobile({
         className="flex-1 px-4 pt-4"
         style={{ paddingBottom: CONTROLS_H + PEEK_H + 16 }}
       >
+        <BroadcastControls streamId={streamId} canManage={!curateOnly} />
         {!loaded ? (
           <p className="py-20 text-center font-mono text-xs text-ink/50">Loading the deck…</p>
         ) : !active ? (
@@ -459,7 +470,10 @@ export function DeckMobile({
                 {active.summary || active.description}
               </p>
             )}
-            <EnrichmentStatus key={`${active.id}:${active.enrichment_state}`} id={active.id} state={active.enrichment_state} />
+            <EnrichmentStatus key={`${active.id}:${active.enrichment_state}`} id={active.id} state={active.enrichment_state} error={active.enrichment_error} />
+
+            <EnrichmentEvidence summary={active.summary} extraction_evidence={active.extraction_evidence} summary_evidence={active.summary_evidence} />
+            <LiveStoryBundle key={active.id} submissionId={active.id} bundleId={active.story_bundle_id} />
 
             <a
               href={active.url}

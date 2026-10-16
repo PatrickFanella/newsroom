@@ -8,7 +8,7 @@
 // Split out of ShelfDetailView.tsx as a structural move only, no rendered
 // output changed.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -20,6 +20,7 @@ import { SendToDeckMenu, type DeckSegment } from './SendToDeckMenu';
 export function ShelfSegmentBlock({
   containerId,
   title,
+  timing,
   editable,
   items,
   canCurate,
@@ -38,6 +39,7 @@ export function ShelfSegmentBlock({
 }: {
   containerId: string;
   title: string | null;
+  timing?: ReactNode;
   editable: boolean;
   items: ShelfItem[];
   canCurate: boolean;
@@ -118,6 +120,7 @@ export function ShelfSegmentBlock({
           )}
         </div>
       )}
+      {timing}
       {!collapsed ? (
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-3 min-h-[2rem]">

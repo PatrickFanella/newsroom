@@ -43,6 +43,9 @@ jobs:
         run: npm run lint
       - name: Test
         run: npm test
+
+      - name: Test local ChatGPT companion
+        run: npm run test:chatgpt
       - name: Production build and type check
         run: npm run build
       - name: Verify Vercel build configuration

@@ -9,6 +9,7 @@ vi.mock('@/lib/search-coverage', () => ({ searchRelatedCoverage: vi.fn() }));
 vi.mock('@/lib/extract', () => ({ runAiEnrichment: vi.fn() }));
 vi.mock('@/lib/submit-url', () => ({ submitUrlToQueue: vi.fn() }));
 vi.mock('@/lib/realtime', () => ({ broadcastQueueChange: vi.fn() }));
+vi.mock('@/lib/submission-enrichment', () => ({ recoverSubmissionEnrichment: vi.fn(async () => {}) }));
 const request = (query = '?page=1') => new NextRequest(`http://localhost/api/queue${query}`);
 const overview = { pending: 210, approved: 1, played: 2, rejected: 3, total: 216, now_playing: { id: 'on-air' } };
 beforeEach(() => { vi.clearAllMocks(); mocks.session.mockResolvedValue({ streamId: 'signed-channel' }); });

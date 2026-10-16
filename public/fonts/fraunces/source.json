@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/google/fonts",
+  "revision": "4024282d9b0cffcdb8e3024560862746178d741f",
+  "path": "ofl/fraunces",
+  "source_sha256": "177ff6c0f14e5550a3c624247cd1189611d4eb65d000b14944c63d967958abbb",
+  "axes": {
+    "opsz": 32,
+    "SOFT": 0,
+    "WONK": 1
+  },
+  "weights": [
+    400,
+    500,
+    600,
+    700,
+    900
+  ],
+  "format": "woff2",
+  "subset": "Latin U+0000-024F, punctuation U+2000-206F, euro, trademark, arrows and minus"
+}

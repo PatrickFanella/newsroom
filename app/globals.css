@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap')
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap')
 layer(base);
 
 /* OpenDyslexic isn't on Google Fonts, so it can't go through the same
@@ -17,6 +17,45 @@ layer(base);
    OTHER font requested alongside it in the same call. */
 @import 'tailwindcss';
 @import 'tw-animate-css';
+
+/* Static display faces avoid browser-dependent variable-font rendering.
+   Files, license and source provenance live in public/fonts/fraunces/. */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/fraunces/fraunces-400-static.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/fraunces/fraunces-500-static.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/fraunces/fraunces-600-static.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/fraunces/fraunces-700-static.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/fraunces/fraunces-900-static.woff2') format('woff2');
+}
+
 
 /* Colors and fonts are defined as CSS custom properties further down (see
    :root below) so a stream's theme/typeface choice can override them at
@@ -88,7 +127,7 @@ layer(base);
 /* Typeface slots. Declared on :root rather than baked into tailwind.config so
    a stream's chosen fonts can override them from an injected <style> without
    a rebuild — see components/StreamTheme.tsx. The families here are the three
-   loaded by the @import above; anything else a streamer picks is fetched at
+   loaded by the local font faces and @import above; other choices are fetched at
    runtime by lib/use-google-fonts.ts. Font stacks are deliberately NOT
    scoped per palette: a theme is a colour decision and a typeface decision,
    and they're set independently. */

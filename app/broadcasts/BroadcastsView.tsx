@@ -9,6 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { loadBroadcast, loadBroadcasts, saveBroadcast } from '@/lib/broadcast-client';
 import { chapterTime, savedRundownOrder, vodChapterUrl, type Broadcast } from '@/lib/broadcast';
+import { AutomationControls } from './AutomationControls';
+import { BoundaryCorrection } from './BoundaryCorrection';
+import { PublishEpisode } from './PublishEpisode';
+import { CarryForward } from './CarryForward';
 import { ShowDiscordExport } from './ShowDiscordExport';
 import { queryKeys } from '@/lib/query-keys';
 import { useRealtimeChannel } from '@/lib/use-realtime-channel';
@@ -59,6 +63,7 @@ export function BroadcastsView({ streamId, canManage, displayName, broadcastId }
   return <div className="min-h-screen flex flex-col">
     <AppHeader section="shows" className="border-b-2 border-ink px-4 sm:px-6 py-3 gap-4" right={<><Link href="/deck" className="underline hover:text-rust">Deck</Link><Link href="/shelf" className="underline hover:text-rust">Shelf</Link><span>{displayName}</span></>} />
     <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      {canManage && <AutomationControls streamId={streamId}/>}
       <BroadcastControls streamId={streamId} canManage={canManage} listen={false} />
       <div className="grid lg:grid-cols-[18rem_1fr] gap-8">
         <section aria-label="Show history" className={broadcastId ? "order-2 lg:order-1" : "order-1"}>
@@ -79,11 +84,17 @@ export function BroadcastsView({ streamId, canManage, displayName, broadcastId }
             <h1 className="font-display text-3xl font-black leading-tight break-words">{broadcast.title}</h1>
             <p className="font-mono text-xs text-ink/60 mt-2">Started {new Date(broadcast.started_at).toLocaleString()} · {broadcast.ended_at ? `Ended ${new Date(broadcast.ended_at).toLocaleString()}` : 'Active show'}</p>
             {canManage && <RecordingSettings key={broadcast.id} broadcast={broadcast} streamId={streamId} />}
+            {canManage && <BoundaryCorrection key={broadcast.id+'-boundaries'} broadcast={broadcast} onSaved={()=>{
+              void client.invalidateQueries({queryKey:queryKeys.broadcasts(streamId)});
+              void client.invalidateQueries({queryKey:queryKeys.broadcast(streamId,broadcast.id)});
+            }}/>}
             <div className="flex flex-wrap gap-4 my-4 text-sm underline">
               <a href={`/api/broadcasts/${broadcast.id}?format=markdown`}>Download show notes</a>
               <a href={`/api/broadcasts/${broadcast.id}?format=chapters`}>Download chapter timestamps</a>
               {broadcast.vod_url && <a href={broadcast.vod_url} target="_blank" rel="noreferrer">Watch recording ↗</a>}
             </div>
+            {canManage && broadcast.ended_at && <PublishEpisode key={broadcast.id+'-publish'} id={broadcast.id} title={broadcast.title} initialToken={broadcast.public_token}/>}
+            {canManage && broadcast.ended_at && <CarryForward key={broadcast.id+'-carry'} detail={{broadcast,notes}}/>}
             {canManage && broadcast.ended_at && <ShowDiscordExport key={broadcast.id} id={broadcast.id}/>}
             <h3 className="font-display text-xl font-bold mt-6 mb-3">Covered stories</h3>
             {notes.length === 0 ? <p className="text-sm text-ink/60">No items marked played in this show yet.</p> : <ol className="space-y-5">

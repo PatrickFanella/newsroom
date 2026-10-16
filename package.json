@@ -11,7 +11,10 @@
     "test": "vitest run",
     "check:deployment": "node scripts/check-deployment.mjs",
     "setup:self-host": "node scripts/setup-self-host.mjs",
-    "test:self-host": "node scripts/smoke-self-host.mjs"
+    "test:self-host": "node scripts/smoke-self-host.mjs",
+    "install:guided": "node scripts/install-server.mjs",
+    "self-host": "node scripts/installed-compose.mjs",
+    "test:installer": "node scripts/smoke-installer.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

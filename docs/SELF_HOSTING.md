@@ -1,5 +1,7 @@
 # Self-hosting with PostgreSQL
 
+For a browser interface that collects settings and runs the setup steps, start with the [guided installation guide](INSTALLATION_GUIDE.md). The commands below describe the manual setup. Guided installations use `node scripts/installed-compose.mjs` in place of the `docker compose --env-file .env.selfhost` prefix, preserving their project name and optional HTTPS service.
+
 The Docker Compose setup runs The Broadside with PostgreSQL 17, a private PostgREST API, the Next.js app, and a daily cleanup scheduler. It does not require a Supabase project, Supabase Auth, Supabase Realtime, or Upstash Redis. PostgreSQL preserves the app's existing transactions, stored functions, and play-history guarantees. SQLite is not supported by this setup.
 
 Email sign-in uses your SMTP server. Twitch sign-in and chat integration remain optional. AI enrichment supports the same Claude and OpenAI-compatible configuration described in [AI providers](AI_PROVIDERS.md); running the app yourself does not add subscription authorization that a provider does not offer.

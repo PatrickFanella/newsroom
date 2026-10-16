@@ -30,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: segments } = await sb
     .from('list_segments')
-    .select('id, name, position')
+    .select('id, name, position, target_minutes')
     .eq('list_id', list.id)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });

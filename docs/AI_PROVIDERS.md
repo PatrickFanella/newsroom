@@ -76,6 +76,11 @@ selected provider's prices or invoice totals.
 
 ## Subscription authorization
 
+For a local personal installation, see [Use a ChatGPT plan locally](CHATGPT_SUBSCRIPTION.md).
+The optional companion implements Newsroom-owned OAuth authorization and a
+loopback gateway for the existing compatible-provider interface. Hosted ChatGPT
+subscription integration remains separate from this local feature.
+
 Checked against official documentation on October 14, 2026:
 
 - **Claude subscriptions:** Anthropic documents subscription usage for native
@@ -86,8 +91,9 @@ Checked against official documentation on October 14, 2026:
 - **ChatGPT subscriptions:** OpenAI documents Sign in with ChatGPT with explicit
   permission for ChatGPT-plan usage in local open-source/personal tools. Remotely
   hosted apps must request access before offering it. This Vercel app has no such
-  registration or approval, so it does not expose a nonfunctional subscription
-  login button or reuse credentials from Codex. See the
+  registration or approval, so the hosted app does not offer subscription
+  sign-in. The local companion requests its own authorization and does not reuse
+  credentials from Codex. See the
   [official integration guide](https://developers.openai.com/cookbook/articles/sign-in-with-chatgpt)
   and [hosting limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
 

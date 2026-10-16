@@ -14,7 +14,10 @@
     "test:self-host": "node scripts/smoke-self-host.mjs",
     "install:guided": "node scripts/install-server.mjs",
     "self-host": "node scripts/installed-compose.mjs",
-    "test:installer": "node scripts/smoke-installer.mjs"
+    "test:installer": "node scripts/smoke-installer.mjs",
+    "chatgpt:connect": "node scripts/chatgpt/companion.mjs",
+    "test:chatgpt": "node --test scripts/chatgpt/companion.node-test.mjs",
+    "chatgpt:run": "node scripts/chatgpt/run-app.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

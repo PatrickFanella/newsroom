@@ -34,6 +34,7 @@ export function validateWebhookUrl(raw: string): WebhookValidation {
   } catch {
     return { ok: false, error: 'Not a valid URL.' };
   }
+  if (u.username || u.password || u.port) return { ok: false, error: 'Use a Discord webhook without credentials or a custom port.' };
   if (u.protocol !== 'https:') return { ok: false, error: 'Must be an https:// URL.' };
   if (!ALLOWED_HOSTS.has(u.hostname.toLowerCase())) {
     return { ok: false, error: 'Must be a discord.com webhook URL.' };
@@ -151,7 +152,7 @@ export async function getPendingPlayedNotes(
   };
 }
 
-async function sendWebhookMessage(
+export async function sendWebhookMessage(
   webhookUrl: string,
   content: string,
   attempt = 0,
@@ -165,8 +166,10 @@ async function sendWebhookMessage(
   try {
     res = await fetch(webhookUrl, {
       method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(8000),
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, flags: 4 }), // SUPPRESS_EMBEDS — a batch of links shouldn't each unfurl into a card
+      body: JSON.stringify({ content, flags: 4, allowed_mentions: { parse: [] } }), // SUPPRESS_EMBEDS — a batch of links shouldn't each unfurl into a card
     });
   } catch {
     return { ok: false, error: 'could not reach discord' };

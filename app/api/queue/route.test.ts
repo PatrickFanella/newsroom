@@ -2,18 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { PATCH } from './route';
 
-const mocks = vi.hoisted(() => ({ session: vi.fn(), process: vi.fn(), waitUntil: vi.fn(), from: vi.fn(), broadcast: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), process: vi.fn(), waitUntil: vi.fn(), from: vi.fn(), rpc: vi.fn(), broadcast: vi.fn() }));
 vi.mock('@/lib/session', () => ({ getApprovedSession: mocks.session, getSession: mocks.session, sessionLogin: () => 'mod' }));
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: () => ({ from: mocks.from }) }));
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: () => ({ from: mocks.from, rpc: mocks.rpc }) }));
 vi.mock('@/lib/submission-enrichment', () => ({ processSubmissionEnrichment: mocks.process, recoverSubmissionEnrichment: vi.fn() }));
 vi.mock('@vercel/functions', () => ({ waitUntil: mocks.waitUntil }));
 vi.mock('@/lib/realtime', () => ({ broadcastQueueChange: mocks.broadcast }));
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.session.mockResolvedValue({ streamId: 'stream-1', role: 'mod', displayName: 'Moderator' });
+  mocks.session.mockResolvedValue({ streamId: 'stream-1', accountId: 'owner', role: 'mod', displayName: 'Moderator' });
   // Providers never finish. Approval must still return a response.
   mocks.process.mockReturnValue(new Promise(() => {}));
+  mocks.rpc.mockResolvedValue({data:{submission:{ id:'submission-1',summary:null,enrichment_state:'queued',status:'approved' }},error:null});
+  let reads = 0;
   mocks.from.mockImplementation(() => {
     let updating = false;
     const chain = {
@@ -22,7 +24,7 @@ beforeEach(() => {
       single: async () => ({ data: updating
         ? { id: 'submission-1', summary: null, enrichment_state: 'queued', status: 'approved' }
         : { normalized_url: 'https://example.com/story' }, error: null }),
-      maybeSingle: async () => ({ data: null, error: null }),
+      maybeSingle: async () => ({ data: reads++ === 0 ? {id:'submission-1',status:'pending',editorial_revision:0,normalized_url:'https://example.com/story'} : null, error: null }),
     };
     return chain;
   });

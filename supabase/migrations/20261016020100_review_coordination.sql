@@ -79,8 +79,8 @@ begin
 end
 $$;
 
-create function public.apply_submission_review(
-  p_stream_id uuid, p_id uuid, p_actor_id text, p_patch jsonb, p_expected_revision integer default null
+create or replace function public.apply_submission_review(
+  p_stream_id uuid, p_id uuid, p_actor_id text, p_patch jsonb, p_expected_revision integer default null, p_expected_status text default null
 )
 returns jsonb language plpgsql set search_path = public as $$
 declare item public.submissions; candidate public.submissions;
@@ -88,7 +88,11 @@ begin
   select * into item from public.submissions where id = p_id and stream_id = p_stream_id for update;
   if not found then return jsonb_build_object('error', 'not_found'); end if;
   if p_actor_id is null or length(p_actor_id) = 0 then raise exception 'Missing actor'; end if;
+  perform set_config('newsroom.actor_id',p_actor_id,true);
   if p_expected_revision is not null and item.editorial_revision <> p_expected_revision then
+    return jsonb_build_object('error', 'stale');
+  end if;
+  if p_expected_status is not null and item.status::text <> p_expected_status then
     return jsonb_build_object('error', 'stale');
   end if;
   if item.review_claim_expires_at > clock_timestamp() and item.review_claim_actor_id <> p_actor_id then
@@ -115,6 +119,9 @@ $$;
 
 revoke execute on function public.advance_submission_revision() from public, anon, authenticated;
 revoke execute on function public.set_submission_review_claim(uuid,uuid,text,text,text,uuid,boolean) from public, anon, authenticated;
-revoke execute on function public.apply_submission_review(uuid,uuid,text,jsonb,integer) from public, anon, authenticated;
+revoke execute on function public.apply_submission_review(uuid,uuid,text,jsonb,integer,text) from public, anon, authenticated;
 grant execute on function public.set_submission_review_claim(uuid,uuid,text,text,text,uuid,boolean) to service_role;
-grant execute on function public.apply_submission_review(uuid,uuid,text,jsonb,integer) to service_role;
+grant execute on function public.apply_submission_review(uuid,uuid,text,jsonb,integer,text) to service_role;
+
+-- Normalize retried play timestamps before comparing editorial fields.
+alter trigger advance_submission_revision on public.submissions rename to zz_advance_submission_revision;

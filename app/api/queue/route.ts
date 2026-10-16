@@ -289,7 +289,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: saved, error } = await sb.rpc('apply_submission_review', {
     p_stream_id: session.streamId, p_id: id, p_actor_id: session.accountId,
-    p_patch: patch, p_expected_revision: expectedRevision,
+    p_patch: patch, p_expected_revision: expectedRevision, p_expected_status: null,
   });
   if (error) return NextResponse.json({ error: 'Review coordination is temporarily unavailable.' }, { status: 503 });
   if (saved?.error) return NextResponse.json({ error: saved.error, detail: reviewConflictMessage(saved.error) }, { status: saved.error === 'not_found' ? 404 : 409 });

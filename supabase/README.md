@@ -102,7 +102,7 @@ project.
 
 ## Queue search and pagination
 
-`20261014020000_queue_search.sql` adds the server-only `search_queue` RPC and
+`20261016020000_queue_search.sql` adds the server-only `search_queue` RPC and
 a channel/status/timestamp/id index. Moderator reads opt into it with
 `/api/queue?page=1&status=pending&q=budget&kind=article`; subsequent pages
 send the returned `nextCursor` as `before`. Search returns up to 50 items,
@@ -126,7 +126,7 @@ The test rolls back its fixtures.
 
 ## Review coordination
 
-`20261014030000_review_coordination.sql` adds editorial revisions and review
+`20261016020100_review_coordination.sql` adds editorial revisions and review
 lease fields to submissions. `advance_submission_revision` increments the
 revision for status, notes, warning, title override, placement, approval/play
 timing, and approval-attribution changes through any write path. It ignores

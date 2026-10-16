@@ -58,16 +58,19 @@ begin
   exception when raise_exception then
     assert sqlerrm = 'Unsupported review field', 'unsupported fields rejected';
   end;
-  if exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'submissions' and column_name = 'play_event_id') then
+  if exists(select 1 from information_schema.columns where table_schema = 'public' and table_name = 'show_notes' and column_name = 'cancelled_at') then
     result := apply_submission_review(channel,item_id,'mod-a','{"status":"played","prep_note":"Compatibility takeaway"}',null);
     assert (select count(*) = 1 from show_notes where submission_id = item_id and cancelled_at is null), 'play-history trigger works through review RPC';
     assert (select takeaway = 'Compatibility takeaway' from show_notes where submission_id = item_id and cancelled_at is null), 'play snapshot retains takeaway';
+    revision := (result->'submission'->>'editorial_revision')::integer;
+    result := apply_submission_review(channel,item_id,'mod-a','{"status":"played","duration_on_screen_s":999}',null);
+    assert (result->'submission'->>'editorial_revision')::integer = revision, 'repeated Played does not invalidate editorial revision';
     result := apply_submission_review(channel,item_id,'mod-a','{"status":"approved"}',null);
     assert (select count(*) = 0 from show_notes where submission_id = item_id and cancelled_at is null), 'Undo through review RPC cancels play note';
   end if;
   assert not has_function_privilege('anon','public.set_submission_review_claim(uuid,uuid,text,text,text,uuid,boolean)','EXECUTE'), 'anonymous claim RPC denied';
-  assert not has_function_privilege('authenticated','public.apply_submission_review(uuid,uuid,text,jsonb,integer)','EXECUTE'), 'direct client patch RPC denied';
-  assert has_function_privilege('service_role','public.apply_submission_review(uuid,uuid,text,jsonb,integer)','EXECUTE'), 'server patch allowed';
+  assert not has_function_privilege('authenticated','public.apply_submission_review(uuid,uuid,text,jsonb,integer,text)','EXECUTE'), 'direct client patch RPC denied';
+  assert has_function_privilege('service_role','public.apply_submission_review(uuid,uuid,text,jsonb,integer,text)','EXECUTE'), 'server patch allowed';
 end
 $$;
 rollback;

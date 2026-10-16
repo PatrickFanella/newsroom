@@ -46,7 +46,7 @@ describe('queue writes with optimistic revision checks', () => {
   it('passes an editable patch and revision to the atomic RPC', async () => {
     const chain = row(); const response = await PATCH(request({ id, trigger_warning: ' Warning ', expectedRevision: 0, actorId: 'foreign', editorial_revision: 900 }));
     expect(response.status).toBe(200); expect(chain.eq.mock.calls).toContainEqual(['stream_id', 'signed-channel']);
-    expect(mocks.rpc).toHaveBeenCalledWith('apply_submission_review', { p_stream_id: 'signed-channel', p_id: id, p_actor_id: 'mod-a', p_patch: { trigger_warning: 'Warning' }, p_expected_revision: 0 });
+    expect(mocks.rpc).toHaveBeenCalledWith('apply_submission_review', { p_stream_id: 'signed-channel', p_id: id, p_actor_id: 'mod-a', p_patch: { trigger_warning: 'Warning' }, p_expected_revision: 0, p_expected_status: null });
   });
   it('rejects stale approval before provider work', async () => {
     row({ ...current, editorial_revision: 1 });

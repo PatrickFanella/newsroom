@@ -114,7 +114,7 @@ combination's pages. Status-tab counts describe the whole channel queue;
 the result count describes the current search. Bulk clear actions still
 apply to the entire selected status, including items outside the search.
 
-Apply `20261014020000_queue_search.sql` before running this feature. The deck
+Apply `20261016020000_queue_search.sql` before running this feature. The deck
 continues to use its existing position-ordered queue. Search covers retained
 submissions; it does not search deleted items or archived show-note history.
 
@@ -134,7 +134,7 @@ card. Open note and warning drafts are kept. Review the changed card before
 using a draft with the latest item, or load the latest saved warning instead.
 Metadata, AI summaries, and archive updates do not invalidate these drafts.
 
-Apply `20261014030000_review_coordination.sql` before deploying this feature.
+Apply `20261016020100_review_coordination.sql` before deploying this feature.
 Existing clients without a revision remain supported, but only versioned
 requests receive stale-edit protection. All queue PATCH requests respect
 active review claims. Bulk deletion and other maintenance/curation routes

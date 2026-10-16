@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, statSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, basename } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -47,7 +47,7 @@ try {
   assert.equal(status.outcome, 'complete', status.phase);
   assert.deepEqual(readFileSync(`${checkout}/.env.selfhost`), saved, 'Resume must preserve every saved secret');
   const databaseCount = compose('exec', '-T', 'db', 'psql', '-U', 'postgres', '-d', 'newsroom', '-Atc', 'SELECT count(*) FROM newsroom_migrations;').trim();
-  assert.equal(Number(databaseCount), 23);
+  assert.equal(Number(databaseCount), readdirSync(`${checkout}/supabase/migrations`).filter(name => name.endsWith('.sql')).length);
   // Validate the alternate automatic HTTPS configuration without publishing
   // ports or requesting certificates for the synthetic domain.
   writeFileSync(`${checkout}/compose.installer.yaml`, httpsOverlay());

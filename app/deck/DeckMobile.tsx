@@ -15,6 +15,7 @@ import { TitleOverrideEditor } from '@/components/TitleOverrideEditor';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { RafflePanel } from '@/components/RafflePanel';
+import { EnrichmentStatus } from '@/components/EnrichmentStatus';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -458,6 +459,7 @@ export function DeckMobile({
                 {active.summary || active.description}
               </p>
             )}
+            <EnrichmentStatus key={`${active.id}:${active.enrichment_state}`} id={active.id} state={active.enrichment_state} />
 
             <a
               href={active.url}

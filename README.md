@@ -91,11 +91,10 @@ No new environment variables.
 1. Streamer clicks **Connect Twitch** on the landing page.
 2. Twitch OAuth completes → we upsert a row in `streams`, register an EventSub webhook for their chat, and set a signed cookie.
 3. Twitch pushes every chat message to `/api/twitch/eventsub`. The handler extracts URLs, applies permission/command/ignore filters, and adds them to the queue. This works 24/7 — no browser tab needs to be open.
-4. Every URL gets enriched inline:
-   - For articles: Readability + OpenGraph
+4. Pending URLs get metadata and free risk signals:
+   - For articles: OpenGraph metadata
    - For YouTube: page scrape + oEmbed + transcript
-   - AI enrichment via Claude Haiku: summary, credibility tag, DMCA risk
-5. Mods open `/mod` → see incoming links, approve/reject/add notes, and attach a viewer-facing trigger warning to anything that needs one.
+5. Mods open `/mod` → see incoming links, approve/reject/add notes, and attach a viewer-facing trigger warning to anything that needs one. Approval starts background Claude Haiku enrichment for the summary, credibility tag, and risk signals, plus best-effort related coverage for articles.
 6. Streamer opens `/deck` → shows only **approved** items in a drag-sortable sidebar. Trigger warnings can also be added or edited here mid-show, and appear on the overlay immediately.
 7. When the streamer hits **Played**, the item is timestamped and copied to `show_notes`.
 8. Export to Markdown anytime from `/api/notes?format=markdown`, or post the played list to a Discord channel from Setup → Account or the deck header.
@@ -103,7 +102,7 @@ No new environment variables.
 ## Architectural choices &amp; trade-offs
 
 - **Chat capture uses Twitch EventSub webhooks.** Twitch pushes chat messages to our API endpoint via HTTP — no persistent connection, no separate worker, runs entirely on Vercel. Links are captured even if nobody has the app open.
-- **The mod view polls, it doesn't push.** The deck and mod views poll every 3-4 seconds. For v2, Supabase Realtime could replace this.
+- **Realtime updates with a polling backstop.** Queue changes broadcast a lightweight Supabase Realtime notification. Views refetch through authenticated API routes; slow polling recovers missed notifications.
 - **DMCA risk is a heuristic, not legal advice.** We combine a host blacklist (Fox, Disney, sports leagues, music labels) with Claude's classification. Display as a signal, not a guarantee.
 - **Service-role Supabase from the server only.** No client-side DB access. RLS is on but we don't grant anon any policies.
 - **Two themes, not one.** `app_theme` is a *default* — a mod who explicitly picks High contrast because they can't read the streamer's palette keeps that choice, since only an unset preference falls through to the brand. `overlay_theme` is absolute: it's matching branding on air with nobody around to adjust it, so it gets per-slot colours rather than inheriting the app's six tokens. The overlay reads its theme from the poll rather than the URL, which is the only way a colour change reaches a browser source mid-show.
@@ -112,6 +111,42 @@ No new environment variables.
 - **YouTube playlist handling** auto-expands into individual submissions when extracted, then the playlist itself is marked rejected with a `mod_notes` trail.
 - **Discord posting gets its own boundary column.** `discord_posted_at` tracks what's already gone to Discord separately from `notes_exported_at`'s Markdown boundary — a streamer posting to Discord and exporting Markdown to somewhere else on different schedules would otherwise find one export silently empty because the other already advanced a shared cursor. The webhook URL itself is a bearer secret (anyone holding it can post into that channel), so it's encrypted at rest the same way as the Twitch OAuth tokens and never sent back to the client after saving — only a "configured" flag is.
 - **Insert-first dedup** handles concurrent submissions without unique constraints, preserving the allow_duplicates feature.
+
+## Approval and enrichment
+
+Pending submissions get metadata and free risk signals. Approving an item saves
+the decision immediately; AI analysis and related-coverage search then run in
+the background using Vercel's `waitUntil`. The moderator does not have to wait
+for either provider before moving to the next item.
+
+Apply `20261013200000_submission_enrichment.sql` before deploying this change.
+It queues work in the same transaction as approval and adds processing state
+to each submission. A database claim allows one worker at a time. Completed
+items and intentionally skipped tweet summaries are not processed again on
+Undo/reapproval. Direct-add uses the same claim, while retaining its existing
+wait-for-metadata response.
+
+Moderator cards and the desktop/mobile deck show queued, running, and failed
+work. Failed work has a **Retry enrichment** button while the item is approved.
+Provider failures and missing AI configuration become failed processing state;
+they do not replace editorial moderator notes. Retry is an explicit action and
+may make another billed provider request.
+
+Related-coverage search remains best effort: an unavailable search provider
+produces no related links and does not prevent a successful AI summary.
+
+Queued work and leases interrupted for more than five minutes are recovered
+when a queue is read. The existing authenticated daily cleanup job also recovers
+up to three items. Each recovery invocation processes at most three items;
+there is no continuously running worker or new cron schedule. A channel nobody
+opens can therefore wait until daily cleanup for recovery, and a larger idle
+backlog may take multiple runs. Failed provider calls are not retried automatically.
+
+The RPC is restricted to the server's service role and verifies the channel,
+approval state, and lease before claiming. Apply the migration to an isolated
+database and run `supabase/tests/submission_enrichment.sql` with
+`psql -v ON_ERROR_STOP=1` to check the database contract. The application tests
+cover asynchronous approval, retry access, provider failures, and status controls.
 
 ## License
 
